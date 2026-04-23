@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArduPilot Param Compare</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">ArduPilot WebTool Style</p>
+        <h1>Param Compare</h1>
+        <p class="subhead">Compare two ArduCopter parameter files in the browser with live metadata, decoded enums, and hover descriptions.</p>
+      </div>
+      <div class="header-actions">
+        <button id="compareButton" class="primary-button">Compare Files</button>
+        <button id="resetVersionButton" class="ghost-button" type="button">Latest Metadata</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="control-panel">
+        <div class="control-grid">
+          <label class="field">
+            <span>Old parameter file</span>
+            <input id="oldFileInput" type="file" accept=".param,.txt,.parm,.params,.cfg,.log,text/plain">
+          </label>
+
+          <label class="field">
+            <span>New parameter file</span>
+            <input id="newFileInput" type="file" accept=".param,.txt,.parm,.params,.cfg,.log,text/plain">
+          </label>
+
+          <label class="field">
+            <span>Optional metadata file</span>
+            <input id="metadataFileInput" type="file" accept=".json,.xml,text/xml,application/json">
+          </label>
+
+          <label class="field">
+            <span>ArduCopter version/ref</span>
+            <input id="versionRefInput" type="text" placeholder="4.5.7 or stable-4.5.7">
+          </label>
+
+          <label class="field field-wide">
+            <span>Metadata URL</span>
+            <input id="metadataUrlInput" type="text" value="https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.json">
+          </label>
+
+          <label class="field">
+            <span>Ignore params</span>
+            <input id="ignoreInput" type="text" placeholder="FORMAT_VERSION, LOG_LASTFILE">
+          </label>
+
+          <label class="field">
+            <span>Sort by</span>
+            <select id="sortByInput">
+              <option value="name">Name</option>
+              <option value="status">Status</option>
+            </select>
+          </label>
+
+          <label class="check-field">
+            <input id="showSameInput" type="checkbox">
+            <span>Include unchanged</span>
+          </label>
+        </div>
+
+        <div class="status-row">
+          <div>
+            <p class="status-label">Status</p>
+            <p id="statusText" class="status-text">Select two files, then compare.</p>
+          </div>
+          <div>
+            <p class="status-label">Metadata</p>
+            <p id="metadataStatusText" class="status-text">Not loaded yet</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="summary-strip" id="summaryStrip">
+        <article class="summary-card">
+          <span>Changed</span>
+          <strong id="summaryChanged">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Added</span>
+          <strong id="summaryAdded">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Removed</span>
+          <strong id="summaryRemoved">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Same</span>
+          <strong id="summarySame">0</strong>
+        </article>
+        <article class="summary-card">
+          <span>Shown</span>
+          <strong id="summaryShown">0</strong>
+        </article>
+      </section>
+
+      <section class="workspace-grid">
+        <section class="table-panel">
+          <div class="toolbar">
+            <label class="search-field">
+              <span>Search</span>
+              <input id="searchInput" type="search" placeholder="Search parameter, notes, decoded values, description">
+            </label>
+
+            <div class="filter-group">
+              <label><input id="filterChanged" type="checkbox" checked> Changed</label>
+              <label><input id="filterAdded" type="checkbox" checked> Added</label>
+              <label><input id="filterRemoved" type="checkbox" checked> Removed</label>
+              <label><input id="filterSame" type="checkbox" checked> Same</label>
+            </div>
+
+            <div class="toolbar-actions">
+              <button id="exportHtmlButton" class="ghost-button" type="button">Export HTML</button>
+              <button id="exportCsvButton" class="ghost-button" type="button">Export CSV</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table id="resultsTable">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Parameter</th>
+                  <th>Old value</th>
+                  <th>New value</th>
+                  <th>Old decoded</th>
+                  <th>New decoded</th>
+                  <th>Display name</th>
+                  <th>Units</th>
+                  <th>Range</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="resultsBody">
+                <tr class="empty-row">
+                  <td colspan="10">No comparison results yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside class="inspector-panel">
+          <div class="inspector-header">
+            <p class="eyebrow">Inspector</p>
+            <h2>Selected parameter</h2>
+          </div>
+
+          <dl class="detail-grid">
+            <div><dt>Parameter</dt><dd id="detailName"></dd></div>
+            <div><dt>Status</dt><dd id="detailStatus"></dd></div>
+            <div><dt>Old value</dt><dd id="detailOldValue"></dd></div>
+            <div><dt>New value</dt><dd id="detailNewValue"></dd></div>
+            <div><dt>Display name</dt><dd id="detailDisplayName"></dd></div>
+            <div><dt>Units</dt><dd id="detailUnits"></dd></div>
+            <div><dt>Range</dt><dd id="detailRange"></dd></div>
+            <div><dt>Decoded</dt><dd id="detailDecoded"></dd></div>
+            <div><dt>Notes</dt><dd id="detailNotes"></dd></div>
+          </dl>
+
+          <section class="description-panel">
+            <p class="eyebrow">Description</p>
+            <p id="detailDescription" class="description-copy">Hover or select a parameter row to inspect it.</p>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
