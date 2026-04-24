@@ -14,68 +14,79 @@
   <div class="app-shell">
     <header class="app-header">
       <div>
-        <p class="eyebrow">ArduPilot WebTool Style</p>
-        <h1>Param Compare</h1>
-        <p class="subhead">Compare two ArduCopter parameter files in the browser with live metadata, decoded enums, and hover descriptions.</p>
+        <p class="eyebrow">ArduPilot parameter diff</p>
+        <h1>Compare flight-controller params</h1>
+        <p class="subhead">Load an old and new parameter file, then review what changed, what was added or removed, and what the values mean in ArduPilot metadata.</p>
       </div>
-      <div class="header-actions">
-        <button id="compareButton" class="primary-button">Compare Files</button>
-        <button id="resetVersionButton" class="ghost-button" type="button">Latest Metadata</button>
+      <div class="header-status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="statusText">Select two files, then compare.</span>
       </div>
     </header>
 
     <main class="workspace">
       <section class="control-panel">
-        <div class="control-grid">
-          <label class="field">
-            <span>Old parameter file</span>
+        <div class="setup-header">
+          <div>
+            <p class="eyebrow">Setup</p>
+            <h2>Choose the files to compare</h2>
+          </div>
+          <button id="compareButton" class="primary-button">Compare files</button>
+        </div>
+
+        <div class="file-grid" aria-label="Comparison files">
+          <label class="field file-field">
+            <span>Old file</span>
             <input id="oldFileInput" type="file" accept=".param,.txt,.parm,.params,.cfg,.log,text/plain">
           </label>
 
-          <label class="field">
-            <span>New parameter file</span>
+          <label class="field file-field">
+            <span>New file</span>
             <input id="newFileInput" type="file" accept=".param,.txt,.parm,.params,.cfg,.log,text/plain">
           </label>
 
-          <label class="field">
-            <span>Optional metadata file</span>
+          <label class="field file-field optional-field">
+            <span>Metadata file</span>
             <input id="metadataFileInput" type="file" accept=".json,.xml,text/xml,application/json">
-          </label>
-
-          <label class="field">
-            <span>ArduCopter version/ref</span>
-            <input id="versionRefInput" type="text" placeholder="4.5.7 or stable-4.5.7">
-          </label>
-
-          <label class="field field-wide">
-            <span>Metadata URL</span>
-            <input id="metadataUrlInput" type="text" value="https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.json">
-          </label>
-
-          <label class="field">
-            <span>Ignore params</span>
-            <input id="ignoreInput" type="text" placeholder="FORMAT_VERSION, LOG_LASTFILE">
-          </label>
-
-          <label class="field">
-            <span>Sort by</span>
-            <select id="sortByInput">
-              <option value="name">Name</option>
-              <option value="status">Status</option>
-            </select>
-          </label>
-
-          <label class="check-field">
-            <input id="showSameInput" type="checkbox">
-            <span>Include unchanged</span>
           </label>
         </div>
 
-        <div class="status-row">
-          <div>
-            <p class="status-label">Status</p>
-            <p id="statusText" class="status-text">Select two files, then compare.</p>
+        <details class="advanced-panel">
+          <summary>Metadata and comparison options</summary>
+          <div class="control-grid">
+            <label class="field">
+              <span>ArduCopter version/ref</span>
+              <input id="versionRefInput" type="text" placeholder="4.5.7 or stable-4.5.7">
+            </label>
+
+            <label class="field field-wide">
+              <span>Metadata URL</span>
+              <input id="metadataUrlInput" type="text" value="https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.json">
+            </label>
+
+            <label class="field">
+              <span>Ignore params</span>
+              <input id="ignoreInput" type="text" placeholder="FORMAT_VERSION, LOG_LASTFILE">
+            </label>
+
+            <label class="field">
+              <span>Sort by</span>
+              <select id="sortByInput">
+                <option value="name">Name</option>
+                <option value="status">Change type</option>
+              </select>
+            </label>
+
+            <label class="check-field">
+              <input id="showSameInput" type="checkbox">
+              <span>Include unchanged parameters</span>
+            </label>
+
+            <button id="resetVersionButton" class="ghost-button inline-action" type="button">Use latest metadata</button>
           </div>
+        </details>
+
+        <div class="status-row">
           <div>
             <p class="status-label">Metadata</p>
             <p id="metadataStatusText" class="status-text">Not loaded yet</p>
@@ -108,22 +119,28 @@
 
       <section class="workspace-grid">
         <section class="table-panel">
-          <div class="toolbar">
-            <label class="search-field">
-              <span>Search</span>
-              <input id="searchInput" type="search" placeholder="Search parameter, notes, decoded values, description">
-            </label>
-
-            <div class="filter-group">
-              <label><input id="filterChanged" type="checkbox" checked> Changed</label>
-              <label><input id="filterAdded" type="checkbox" checked> Added</label>
-              <label><input id="filterRemoved" type="checkbox" checked> Removed</label>
-              <label><input id="filterSame" type="checkbox" checked> Same</label>
+          <div class="results-header">
+            <div>
+              <p class="eyebrow">Results</p>
+              <h2>Parameter changes</h2>
             </div>
-
             <div class="toolbar-actions">
               <button id="exportHtmlButton" class="ghost-button" type="button">Export HTML</button>
               <button id="exportCsvButton" class="ghost-button" type="button">Export CSV</button>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <label class="search-field">
+              <span>Search results</span>
+              <input id="searchInput" type="search" placeholder="Find a parameter, value, enum, note, or description">
+            </label>
+
+            <div class="filter-group" aria-label="Visible change types">
+              <label><input id="filterChanged" type="checkbox" checked> Changed</label>
+              <label><input id="filterAdded" type="checkbox" checked> Added</label>
+              <label><input id="filterRemoved" type="checkbox" checked> Removed</label>
+              <label class="same-filter"><input id="filterSame" type="checkbox" checked> Same</label>
             </div>
           </div>
 
@@ -131,21 +148,17 @@
             <table id="resultsTable">
               <thead>
                 <tr>
-                  <th>Status</th>
+                  <th>Impact</th>
                   <th>Parameter</th>
-                  <th>Old value</th>
-                  <th>New value</th>
-                  <th>Old decoded</th>
-                  <th>New decoded</th>
-                  <th>Display name</th>
-                  <th>Units</th>
-                  <th>Range</th>
+                  <th>Value change</th>
+                  <th>Decoded meaning</th>
+                  <th>Metadata</th>
                   <th>Notes</th>
                 </tr>
               </thead>
               <tbody id="resultsBody">
                 <tr class="empty-row">
-                  <td colspan="10">No comparison results yet.</td>
+                  <td colspan="6">No comparison results yet.</td>
                 </tr>
               </tbody>
             </table>

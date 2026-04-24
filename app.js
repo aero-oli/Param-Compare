@@ -4,6 +4,12 @@ const DEFAULT_METADATA_URL = "https://autotest.ardupilot.org/Parameters/ArduCopt
 const DEFAULT_VERSIONED_METADATA_URL_TEMPLATE =
   "https://autotest.ardupilot.org/Parameters/versioned/Copter/{version}/apm.pdef.json";
 const STATUS_ORDER = { changed: 0, added: 1, removed: 2, same: 3 };
+const STATUS_LABELS = {
+  changed: "Changed",
+  added: "Added",
+  removed: "Removed",
+  same: "Same"
+};
 const FLOAT_REL_TOL = 1e-9;
 const FLOAT_ABS_TOL = 1e-12;
 const CACHE_PREFIX = "ardupilot-param-compare-cache:";
@@ -505,7 +511,7 @@ function sortRows(rows, sortBy) {
   const sorted = [...rows];
   if (sortBy === "status") {
     sorted.sort((a, b) => {
-      const statusDelta = (STATUS_ORDER[a.status] || 99) - (STATUS_ORDER[b.status] || 99);
+      const statusDelta = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
       return statusDelta || a.name.localeCompare(b.name);
     });
     return sorted;
@@ -539,6 +545,11 @@ function getEnabledStatuses() {
   return enabled;
 }
 
+function syncFilterAvailability() {
+  elements.filterSame.disabled = !elements.showSameInput.checked;
+  elements.filterSame.closest("label").classList.toggle("is-disabled", !elements.showSameInput.checked);
+}
+
 function updateSummary() {
   const counts = statusCounts(state.allRows);
   elements.summaryChanged.textContent = String(counts.changed);
@@ -549,16 +560,16 @@ function updateSummary() {
 }
 
 function clearDetails() {
-  elements.detailName.textContent = "";
-  elements.detailStatus.textContent = "";
-  elements.detailOldValue.textContent = "";
-  elements.detailNewValue.textContent = "";
-  elements.detailDisplayName.textContent = "";
-  elements.detailUnits.textContent = "";
-  elements.detailRange.textContent = "";
-  elements.detailDecoded.textContent = "";
-  elements.detailNotes.textContent = "";
-  elements.detailDescription.textContent = "Hover or select a parameter row to inspect it.";
+  elements.detailName.textContent = "No row selected";
+  elements.detailStatus.textContent = "-";
+  elements.detailOldValue.textContent = "-";
+  elements.detailNewValue.textContent = "-";
+  elements.detailDisplayName.textContent = "-";
+  elements.detailUnits.textContent = "-";
+  elements.detailRange.textContent = "-";
+  elements.detailDecoded.textContent = "-";
+  elements.detailNotes.textContent = "-";
+  elements.detailDescription.textContent = "Run a comparison, then select a parameter row to see the full metadata description.";
 }
 
 function renderDetails(row) {
@@ -567,16 +578,16 @@ function renderDetails(row) {
     return;
   }
   elements.detailName.textContent = row.name;
-  elements.detailStatus.textContent = row.status;
-  elements.detailOldValue.textContent = row.oldValue;
-  elements.detailNewValue.textContent = row.newValue;
-  elements.detailDisplayName.textContent = row.displayName;
-  elements.detailUnits.textContent = row.units;
-  elements.detailRange.textContent = row.allowedRange;
+  elements.detailStatus.textContent = STATUS_LABELS[row.status] || row.status;
+  elements.detailOldValue.textContent = row.oldValue || "-";
+  elements.detailNewValue.textContent = row.newValue || "-";
+  elements.detailDisplayName.textContent = row.displayName || "-";
+  elements.detailUnits.textContent = row.units || "-";
+  elements.detailRange.textContent = row.allowedRange || "-";
   elements.detailDecoded.textContent = [row.oldDecoded ? `Old: ${row.oldDecoded}` : "", row.newDecoded ? `New: ${row.newDecoded}` : ""]
     .filter(Boolean)
-    .join(" | ");
-  elements.detailNotes.textContent = row.notes;
+    .join(" | ") || "-";
+  elements.detailNotes.textContent = row.notes || "-";
   elements.detailDescription.textContent = row.description || "No description available.";
 }
 
@@ -592,12 +603,53 @@ function escapeHtml(text) {
     .replaceAll('"', "&quot;");
 }
 
+function statusBadge(row) {
+  return `<span class="status-badge status-badge-${escapeHtml(row.status)}">${escapeHtml(STATUS_LABELS[row.status] || row.status)}</span>`;
+}
+
+function valueChangeMarkup(row) {
+  if (row.status === "added") {
+    return `<span class="value-missing">not present</span><span class="change-arrow">&rarr;</span><span class="mono value-new">${escapeHtml(row.newValue)}</span>`;
+  }
+  if (row.status === "removed") {
+    return `<span class="mono value-old">${escapeHtml(row.oldValue)}</span><span class="change-arrow">&rarr;</span><span class="value-missing">not present</span>`;
+  }
+  return `<span class="mono value-old">${escapeHtml(row.oldValue)}</span><span class="change-arrow">&rarr;</span><span class="mono value-new">${escapeHtml(row.newValue)}</span>`;
+}
+
+function decodedMarkup(row) {
+  if (!row.oldDecoded && !row.newDecoded) {
+    return "<span class=\"empty-meta\">No enum or bitmask label</span>";
+  }
+  if (row.status === "added") {
+    return `<span class="empty-meta">not present</span><span class="change-arrow">&rarr;</span><span>${escapeHtml(row.newDecoded || "-")}</span>`;
+  }
+  if (row.status === "removed") {
+    return `<span>${escapeHtml(row.oldDecoded || "-")}</span><span class="change-arrow">&rarr;</span><span class="empty-meta">not present</span>`;
+  }
+  return `<span>${escapeHtml(row.oldDecoded || "-")}</span><span class="change-arrow">&rarr;</span><span>${escapeHtml(row.newDecoded || "-")}</span>`;
+}
+
+function metadataMarkup(row) {
+  const items = [];
+  if (row.units) {
+    items.push(`<span><strong>Units</strong>${escapeHtml(row.units)}</span>`);
+  }
+  if (row.allowedRange) {
+    items.push(`<span><strong>Range</strong><code>${escapeHtml(row.allowedRange)}</code></span>`);
+  }
+  if (!items.length) {
+    return "<span class=\"empty-meta\">No metadata</span>";
+  }
+  return `<div class="meta-stack">${items.join("")}</div>`;
+}
+
 function renderTable() {
   elements.resultsBody.innerHTML = "";
   if (!state.filteredRows.length) {
     const emptyRow = document.createElement("tr");
     emptyRow.className = "empty-row";
-    emptyRow.innerHTML = "<td colspan=\"10\">No rows match the current filters.</td>";
+    emptyRow.innerHTML = "<td colspan=\"6\">No rows match the current filters.</td>";
     elements.resultsBody.appendChild(emptyRow);
     renderDetails(null);
     updateSummary();
@@ -612,17 +664,17 @@ function renderTable() {
       tr.classList.add("is-selected");
     }
     tr.dataset.rowId = row.id;
+    tr.tabIndex = 0;
     tr.innerHTML = `
-      <td>${escapeHtml(row.status)}</td>
-      <td class="param-name">${escapeHtml(row.name)}</td>
-      <td class="mono">${escapeHtml(row.oldValue)}</td>
-      <td class="mono">${escapeHtml(row.newValue)}</td>
-      <td>${escapeHtml(row.oldDecoded)}</td>
-      <td>${escapeHtml(row.newDecoded)}</td>
-      <td>${escapeHtml(row.displayName)}</td>
-      <td>${escapeHtml(row.units)}</td>
-      <td class="mono">${escapeHtml(row.allowedRange)}</td>
-      <td>${escapeHtml(row.notes)}</td>
+      <td>${statusBadge(row)}</td>
+      <td>
+        <div class="param-name">${escapeHtml(row.name)}</div>
+        <div class="param-label">${escapeHtml(row.displayName || "No display name in metadata")}</div>
+      </td>
+      <td><div class="change-pair">${valueChangeMarkup(row)}</div></td>
+      <td><div class="change-pair decoded-pair">${decodedMarkup(row)}</div></td>
+      <td>${metadataMarkup(row)}</td>
+      <td>${escapeHtml(row.notes || "No notes")}</td>
     `;
     fragment.appendChild(tr);
   });
@@ -646,6 +698,7 @@ function highlightSelectedRow() {
 }
 
 function applyFilters() {
+  syncFilterAvailability();
   const enabledStatuses = getEnabledStatuses();
   const query = elements.searchInput.value.trim().toLowerCase();
 
@@ -744,7 +797,7 @@ async function compareFiles() {
     state.allRows = sortRows(rows, elements.sortByInput.value);
     state.selectedRowId = state.allRows[0]?.id || "";
     applyFilters();
-    setStatus(`Comparison complete. Loaded ${state.allRows.length} rows.`);
+    setStatus(`Comparison complete. Showing ${state.filteredRows.length} of ${state.allRows.length} relevant rows.`);
   } catch (error) {
     console.error(error);
     setStatus(`Comparison failed: ${error.message}`);
@@ -902,6 +955,20 @@ function handleTableClick(event) {
   renderDetails(rowById(state.selectedRowId));
 }
 
+function handleTableKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+  const rowElement = event.target.closest("tr[data-row-id]");
+  if (!rowElement) {
+    return;
+  }
+  event.preventDefault();
+  state.selectedRowId = rowElement.dataset.rowId;
+  highlightSelectedRow();
+  renderDetails(rowById(state.selectedRowId));
+}
+
 function handleTableMove(event) {
   const rowElement = event.target.closest("tr[data-row-id]");
   if (!rowElement) {
@@ -951,6 +1018,7 @@ function initializeEvents() {
   elements.exportCsvButton.addEventListener("click", exportCsv);
   elements.exportHtmlButton.addEventListener("click", exportHtml);
   elements.resultsBody.addEventListener("click", handleTableClick);
+  elements.resultsBody.addEventListener("keydown", handleTableKeydown);
   elements.resultsBody.addEventListener("mousemove", handleTableMove);
   elements.resultsBody.addEventListener("mouseleave", hideTooltip);
   window.addEventListener("scroll", hideTooltip, { passive: true });
@@ -958,4 +1026,5 @@ function initializeEvents() {
 }
 
 initializeEvents();
+syncFilterAvailability();
 clearDetails();
