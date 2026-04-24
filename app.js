@@ -14,6 +14,17 @@ const FLOAT_REL_TOL = 1e-9;
 const FLOAT_ABS_TOL = 1e-12;
 const CACHE_PREFIX = "ardupilot-param-compare-cache:";
 const TOOLTIP_OFFSET = 16;
+const DEFAULT_AI_SETTINGS = {
+  model: "gpt-5.4-mini",
+  reasoning_effort: "low",
+  verbosity: "medium",
+  max_output_tokens: 2400,
+  service_tier: "auto",
+  web_search_enabled: true,
+  web_search_context_size: "medium",
+  external_web_access: true,
+  temperature: null
+};
 
 const state = {
   allRows: [],
@@ -22,9 +33,20 @@ const state = {
   metadataSource: "Not loaded yet",
   selectedRowId: "",
   hoveredRowId: "",
+  focusedParamNames: new Set(),
   files: {
     oldName: "",
     newName: ""
+  },
+  ai: {
+    sessionReady: false,
+    contextReady: false,
+    contextDirty: true,
+    isBusy: false,
+    panelOpen: false,
+    activeTab: "chat",
+    settings: { ...DEFAULT_AI_SETTINGS },
+    messages: []
   }
 };
 
@@ -46,6 +68,8 @@ const elements = {
   filterSame: document.getElementById("filterSame"),
   exportHtmlButton: document.getElementById("exportHtmlButton"),
   exportCsvButton: document.getElementById("exportCsvButton"),
+  focusVisibleChangedButton: document.getElementById("focusVisibleChangedButton"),
+  clearVisibleFocusButton: document.getElementById("clearVisibleFocusButton"),
   resultsBody: document.getElementById("resultsBody"),
   statusText: document.getElementById("statusText"),
   metadataStatusText: document.getElementById("metadataStatusText"),
@@ -64,6 +88,43 @@ const elements = {
   detailDecoded: document.getElementById("detailDecoded"),
   detailNotes: document.getElementById("detailNotes"),
   detailDescription: document.getElementById("detailDescription"),
+  toggleFocusSelectedButton: document.getElementById("toggleFocusSelectedButton"),
+  openAiButton: document.getElementById("openAiButton"),
+  clearInspectorFocusButton: document.getElementById("clearInspectorFocusButton"),
+  inspectorFocusedParamChips: document.getElementById("inspectorFocusedParamChips"),
+  aiLauncherButton: document.getElementById("aiLauncherButton"),
+  aiDrawerBackdrop: document.getElementById("aiDrawerBackdrop"),
+  aiAssistantDrawer: document.getElementById("aiAssistantDrawer"),
+  closeAiDrawerButton: document.getElementById("closeAiDrawerButton"),
+  aiTabButtons: Array.from(document.querySelectorAll("[data-ai-tab]")),
+  aiTabPanels: {
+    chat: document.getElementById("aiTabChat"),
+    setup: document.getElementById("aiTabSetup"),
+    settings: document.getElementById("aiTabSettings")
+  },
+  aiChatSetupNotice: document.getElementById("aiChatSetupNotice"),
+  aiChatConnectButton: document.getElementById("aiChatConnectButton"),
+  openAiKeyInput: document.getElementById("openAiKeyInput"),
+  connectAiButton: document.getElementById("connectAiButton"),
+  prepareAiContextButton: document.getElementById("prepareAiContextButton"),
+  cleanupAiButton: document.getElementById("cleanupAiButton"),
+  aiSessionStatus: document.getElementById("aiSessionStatus"),
+  aiContextStatus: document.getElementById("aiContextStatus"),
+  aiModelInput: document.getElementById("aiModelInput"),
+  aiModelOptions: document.getElementById("aiModelOptions"),
+  aiReasoningInput: document.getElementById("aiReasoningInput"),
+  aiVerbosityInput: document.getElementById("aiVerbosityInput"),
+  aiMaxTokensInput: document.getElementById("aiMaxTokensInput"),
+  aiWebSearchInput: document.getElementById("aiWebSearchInput"),
+  aiWebContextInput: document.getElementById("aiWebContextInput"),
+  aiLiveWebInput: document.getElementById("aiLiveWebInput"),
+  aiServiceTierInput: document.getElementById("aiServiceTierInput"),
+  aiTemperatureInput: document.getElementById("aiTemperatureInput"),
+  focusedParamChips: document.getElementById("focusedParamChips"),
+  clearAllFocusButton: document.getElementById("clearAllFocusButton"),
+  aiChatLog: document.getElementById("aiChatLog"),
+  aiQuestionInput: document.getElementById("aiQuestionInput"),
+  askAiButton: document.getElementById("askAiButton"),
   tooltip: document.getElementById("tooltip")
 };
 
@@ -73,6 +134,71 @@ function setStatus(text) {
 
 function setMetadataStatus(text) {
   elements.metadataStatusText.textContent = text;
+}
+
+function setAiSessionStatus(text) {
+  elements.aiSessionStatus.textContent = text;
+}
+
+function setAiContextStatus(text) {
+  elements.aiContextStatus.textContent = text;
+}
+
+function syncAiShellState() {
+  elements.aiAssistantDrawer.classList.toggle("is-open", state.ai.panelOpen);
+  elements.aiAssistantDrawer.setAttribute("aria-hidden", state.ai.panelOpen ? "false" : "true");
+  elements.aiAssistantDrawer.inert = !state.ai.panelOpen;
+  elements.aiLauncherButton.setAttribute("aria-expanded", state.ai.panelOpen ? "true" : "false");
+  elements.aiDrawerBackdrop.hidden = !state.ai.panelOpen;
+  elements.aiChatSetupNotice.hidden = state.ai.sessionReady;
+}
+
+function setAiTab(tab) {
+  const nextTab = elements.aiTabPanels[tab] ? tab : "chat";
+  state.ai.activeTab = nextTab;
+  elements.aiTabButtons.forEach((button) => {
+    const isActive = button.dataset.aiTab === nextTab;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  Object.entries(elements.aiTabPanels).forEach(([key, panel]) => {
+    panel.classList.toggle("is-active", key === nextTab);
+    panel.hidden = key !== nextTab;
+  });
+}
+
+function openAiPanel(tab = "chat") {
+  state.ai.panelOpen = true;
+  setAiTab(tab);
+  syncAiShellState();
+}
+
+function closeAiPanel() {
+  state.ai.panelOpen = false;
+  syncAiShellState();
+}
+
+function setAiBusy(isBusy) {
+  state.ai.isBusy = isBusy;
+  elements.connectAiButton.disabled = isBusy;
+  elements.prepareAiContextButton.disabled = isBusy || !state.ai.sessionReady || !state.allRows.length;
+  elements.askAiButton.disabled = isBusy || !state.ai.sessionReady || !state.allRows.length;
+  elements.aiChatConnectButton.disabled = isBusy;
+  elements.cleanupAiButton.disabled = isBusy || !state.ai.sessionReady;
+  syncAiShellState();
+}
+
+async function postJson(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {})
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed with HTTP ${response.status}`);
+  }
+  return data;
 }
 
 function normalizeVersionRef(raw) {
@@ -607,6 +733,15 @@ function statusBadge(row) {
   return `<span class="status-badge status-badge-${escapeHtml(row.status)}">${escapeHtml(STATUS_LABELS[row.status] || row.status)}</span>`;
 }
 
+function focusToggleMarkup(row) {
+  const isFocused = state.focusedParamNames.has(row.name);
+  return `
+    <button class="focus-toggle${isFocused ? " is-focused" : ""}" type="button" data-focus-param="${escapeHtml(row.name)}" aria-label="${isFocused ? "Remove AI focus" : "Add AI focus"} ${escapeHtml(row.name)}" title="${isFocused ? "Remove AI focus" : "Add AI focus"}">
+      ${isFocused ? "✓" : "+"}
+    </button>
+  `;
+}
+
 function valueChangeMarkup(row) {
   if (row.status === "added") {
     return `<span class="value-missing">not present</span><span class="change-arrow">&rarr;</span><span class="mono value-new">${escapeHtml(row.newValue)}</span>`;
@@ -615,6 +750,20 @@ function valueChangeMarkup(row) {
     return `<span class="mono value-old">${escapeHtml(row.oldValue)}</span><span class="change-arrow">&rarr;</span><span class="value-missing">not present</span>`;
   }
   return `<span class="mono value-old">${escapeHtml(row.oldValue)}</span><span class="change-arrow">&rarr;</span><span class="mono value-new">${escapeHtml(row.newValue)}</span>`;
+}
+
+function oldValueMarkup(row) {
+  if (row.status === "added") {
+    return "<span class=\"value-missing\">not present</span>";
+  }
+  return `<span class="mono value-old">${escapeHtml(row.oldValue)}</span>`;
+}
+
+function newValueMarkup(row) {
+  if (row.status === "removed") {
+    return "<span class=\"value-missing\">not present</span>";
+  }
+  return `<span class="mono value-new">${escapeHtml(row.newValue)}</span>`;
 }
 
 function decodedMarkup(row) {
@@ -649,7 +798,7 @@ function renderTable() {
   if (!state.filteredRows.length) {
     const emptyRow = document.createElement("tr");
     emptyRow.className = "empty-row";
-    emptyRow.innerHTML = "<td colspan=\"6\">No rows match the current filters.</td>";
+    emptyRow.innerHTML = "<td colspan=\"8\">No rows match the current filters.</td>";
     elements.resultsBody.appendChild(emptyRow);
     renderDetails(null);
     updateSummary();
@@ -663,15 +812,20 @@ function renderTable() {
     if (row.id === state.selectedRowId) {
       tr.classList.add("is-selected");
     }
+    if (state.focusedParamNames.has(row.name)) {
+      tr.classList.add("is-focused");
+    }
     tr.dataset.rowId = row.id;
     tr.tabIndex = 0;
     tr.innerHTML = `
+      <td>${focusToggleMarkup(row)}</td>
       <td>${statusBadge(row)}</td>
       <td>
         <div class="param-name">${escapeHtml(row.name)}</div>
         <div class="param-label">${escapeHtml(row.displayName || "No display name in metadata")}</div>
       </td>
-      <td><div class="change-pair">${valueChangeMarkup(row)}</div></td>
+      <td>${oldValueMarkup(row)}</td>
+      <td>${newValueMarkup(row)}</td>
       <td><div class="change-pair decoded-pair">${decodedMarkup(row)}</div></td>
       <td>${metadataMarkup(row)}</td>
       <td>${escapeHtml(row.notes || "No notes")}</td>
@@ -689,11 +843,14 @@ function renderTable() {
     renderDetails(null);
   }
   updateSummary();
+  renderFocusChips();
 }
 
 function highlightSelectedRow() {
   elements.resultsBody.querySelectorAll("tr").forEach((tr) => {
+    const row = rowById(tr.dataset.rowId || "");
     tr.classList.toggle("is-selected", tr.dataset.rowId === state.selectedRowId);
+    tr.classList.toggle("is-focused", row ? state.focusedParamNames.has(row.name) : false);
   });
 }
 
@@ -753,6 +910,140 @@ function rowById(id) {
   return state.filteredRows.find((row) => row.id === id) || null;
 }
 
+function rowByName(name) {
+  return state.allRows.find((row) => row.name === name) || null;
+}
+
+function currentSelectedRow() {
+  return state.allRows.find((row) => row.id === state.selectedRowId) || null;
+}
+
+function effectiveFocusNames() {
+  const explicit = Array.from(state.focusedParamNames);
+  if (explicit.length) {
+    return explicit;
+  }
+  const selected = currentSelectedRow();
+  return selected ? [selected.name] : [];
+}
+
+function markAiContextDirty(reason) {
+  state.ai.contextDirty = true;
+  state.ai.contextReady = false;
+  if (state.ai.sessionReady) {
+    setAiContextStatus(reason || "AI context needs to be prepared.");
+  }
+}
+
+function setFocusedParam(name, isFocused) {
+  if (!name || !rowByName(name)) {
+    return;
+  }
+  if (isFocused) {
+    state.focusedParamNames.add(name);
+  } else {
+    state.focusedParamNames.delete(name);
+  }
+  highlightSelectedRow();
+  renderFocusChips();
+  markAiContextDirty("Focus changed. Prepare context before the next AI answer.");
+}
+
+function toggleFocusedParam(name) {
+  setFocusedParam(name, !state.focusedParamNames.has(name));
+  renderTable();
+}
+
+function renderFocusChips() {
+  const names = Array.from(state.focusedParamNames).sort();
+  const containers = [elements.focusedParamChips, elements.inspectorFocusedParamChips];
+
+  containers.forEach((container) => {
+    container.innerHTML = "";
+  });
+
+  if (!names.length) {
+    const selected = currentSelectedRow();
+    containers.forEach((container) => {
+      const fallback = document.createElement("span");
+      fallback.className = "focus-chip";
+      fallback.textContent = selected ? `Using selected: ${selected.name}` : "No focused params";
+      container.appendChild(fallback);
+    });
+    elements.toggleFocusSelectedButton.textContent = "Focus";
+    elements.toggleFocusSelectedButton.disabled = !selected;
+    return;
+  }
+
+  containers.forEach((container) => {
+    names.forEach((name) => {
+      const chip = document.createElement("span");
+      chip.className = "focus-chip";
+      const label = document.createElement("span");
+      label.textContent = name;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "x";
+      button.setAttribute("aria-label", `Remove ${name} from AI focus`);
+      button.addEventListener("click", () => {
+        setFocusedParam(name, false);
+        renderTable();
+      });
+      chip.append(label, button);
+      container.appendChild(chip);
+    });
+  });
+
+  const selected = currentSelectedRow();
+  elements.toggleFocusSelectedButton.disabled = !selected;
+  elements.toggleFocusSelectedButton.textContent = selected && state.focusedParamNames.has(selected.name)
+    ? "Unfocus"
+    : "Focus";
+}
+
+function serializeMetadataEntries() {
+  return Array.from(state.metadata.values()).map((meta) => ({
+    name: meta.name,
+    displayName: meta.displayName,
+    description: meta.description,
+    units: meta.units,
+    user: meta.user,
+    low: meta.low,
+    high: meta.high,
+    values: meta.values,
+    bitmask: meta.bitmask,
+    rebootRequired: meta.rebootRequired
+  }));
+}
+
+function aiSettingsFromInputs() {
+  const temperatureRaw = elements.aiTemperatureInput.value.trim();
+  return {
+    model: elements.aiModelInput.value.trim() || DEFAULT_AI_SETTINGS.model,
+    reasoning_effort: elements.aiReasoningInput.value,
+    verbosity: elements.aiVerbosityInput.value,
+    max_output_tokens: Number(elements.aiMaxTokensInput.value) || DEFAULT_AI_SETTINGS.max_output_tokens,
+    service_tier: elements.aiServiceTierInput.value,
+    web_search_enabled: elements.aiWebSearchInput.checked,
+    web_search_context_size: elements.aiWebContextInput.value,
+    external_web_access: elements.aiLiveWebInput.checked,
+    temperature: temperatureRaw ? Number(temperatureRaw) : null
+  };
+}
+
+function aiContextPayload() {
+  const selected = currentSelectedRow();
+  return {
+    rows: state.allRows,
+    metadataEntries: serializeMetadataEntries(),
+    metadataSource: state.metadataSource,
+    versionRef: elements.versionRefInput.value.trim(),
+    files: { ...state.files },
+    selectedParamName: selected ? selected.name : "",
+    focusedParamNames: effectiveFocusNames()
+  };
+}
+
 async function compareFiles() {
   const oldFile = elements.oldFileInput.files[0];
   const newFile = elements.newFileInput.files[0];
@@ -796,14 +1087,267 @@ async function compareFiles() {
 
     state.allRows = sortRows(rows, elements.sortByInput.value);
     state.selectedRowId = state.allRows[0]?.id || "";
+    state.focusedParamNames = new Set(Array.from(state.focusedParamNames).filter((name) => rows.some((row) => row.name === name)));
+    markAiContextDirty("Comparison changed. Prepare AI context.");
     applyFilters();
     setStatus(`Comparison complete. Showing ${state.filteredRows.length} of ${state.allRows.length} relevant rows.`);
+    if (state.ai.sessionReady) {
+      syncAiContext().catch((error) => {
+        setAiContextStatus(`Context preparation failed: ${error.message}`);
+      });
+    }
   } catch (error) {
     console.error(error);
     setStatus(`Comparison failed: ${error.message}`);
     setMetadataStatus("Metadata load failed");
   } finally {
     elements.compareButton.disabled = false;
+  }
+}
+
+function populateModelOptions(models) {
+  elements.aiModelOptions.innerHTML = "";
+  models.slice(0, 200).forEach((model) => {
+    const option = document.createElement("option");
+    option.value = model;
+    elements.aiModelOptions.appendChild(option);
+  });
+}
+
+async function connectAiSession() {
+  openAiPanel("setup");
+  const apiKey = elements.openAiKeyInput.value.trim();
+  if (!apiKey) {
+    setAiSessionStatus("Enter an OpenAI API key first.");
+    return;
+  }
+
+  setAiBusy(true);
+  setAiSessionStatus("Validating API key...");
+  try {
+    const result = await postJson("/api/openai/session", { apiKey });
+    state.ai.sessionReady = true;
+    state.ai.contextReady = false;
+    state.ai.contextDirty = true;
+    elements.openAiKeyInput.value = "";
+    populateModelOptions(result.models || []);
+    if (result.recommendedModel && !elements.aiModelInput.value.trim()) {
+      elements.aiModelInput.value = result.recommendedModel;
+    }
+    setAiSessionStatus("AI connected. API key is held in backend memory only.");
+    setAiContextStatus(state.allRows.length ? "Preparing AI context..." : "Run a comparison before preparing context.");
+    if (state.allRows.length) {
+      await syncAiContext();
+    }
+    setAiTab("chat");
+  } catch (error) {
+    state.ai.sessionReady = false;
+    setAiSessionStatus(`AI connection failed: ${error.message}`);
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+async function syncAiContext() {
+  if (!state.ai.sessionReady) {
+    setAiContextStatus("Connect AI before preparing context.");
+    return;
+  }
+  if (!state.allRows.length) {
+    setAiContextStatus("Run a comparison before preparing context.");
+    return;
+  }
+
+  setAiBusy(true);
+  setAiContextStatus("Creating vector store and uploading comparison context...");
+  try {
+    const result = await postJson("/api/ai/context", aiContextPayload());
+    state.ai.contextReady = true;
+    state.ai.contextDirty = false;
+    setAiContextStatus(
+      `Context ready: ${result.fileCount} knowledge files in vector store${result.ready ? "" : " (still processing; first answer may wait)"}`
+    );
+  } catch (error) {
+    state.ai.contextReady = false;
+    state.ai.contextDirty = true;
+    setAiContextStatus(`Context preparation failed: ${error.message}`);
+    throw error;
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+function appendAiMessage(role, payload) {
+  state.ai.messages.push({ role, payload, timestamp: new Date() });
+  renderAiMessages();
+}
+
+function linkElement(url, title) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.textContent = title || url;
+  return link;
+}
+
+function renderAiMessages() {
+  elements.aiChatLog.innerHTML = "";
+  if (!state.ai.messages.length) {
+    const empty = document.createElement("div");
+    empty.className = "ai-empty";
+    empty.textContent = "Connect AI, run a comparison, focus one or more params, then ask a question.";
+    elements.aiChatLog.appendChild(empty);
+    return;
+  }
+
+  state.ai.messages.forEach((message) => {
+    const card = document.createElement("article");
+    card.className = `ai-message ai-message-${message.role}`;
+    const header = document.createElement("div");
+    header.className = "ai-message-header";
+    header.innerHTML = `<span>${message.role === "user" ? "You" : "Assistant"}</span><span>${message.timestamp.toLocaleTimeString()}</span>`;
+    const body = document.createElement("div");
+    body.className = "ai-message-body";
+
+    if (message.role === "user") {
+      body.textContent = message.payload.question;
+      card.append(header, body);
+      elements.aiChatLog.appendChild(card);
+      return;
+    }
+
+    const answer = message.payload.answer || {};
+    body.textContent = answer.answer_markdown || "No answer returned.";
+    card.append(header, body);
+
+    const meta = document.createElement("div");
+    meta.className = "ai-meta-list";
+    const chips = [];
+    if (answer.focus_params_used?.length) {
+      chips.push(`Focus: ${answer.focus_params_used.join(", ")}`);
+    }
+    if (answer.referenced_params?.length) {
+      chips.push(`Referenced: ${answer.referenced_params.join(", ")}`);
+    }
+    if (message.payload.effectiveSettings) {
+      chips.push(`Model: ${message.payload.effectiveSettings.model}, reasoning: ${message.payload.effectiveSettings.reasoning_effort}`);
+    }
+    chips.forEach((text) => {
+      const item = document.createElement("span");
+      item.className = "source-chip";
+      item.textContent = text;
+      meta.appendChild(item);
+    });
+    if (meta.children.length) {
+      card.appendChild(meta);
+    }
+
+    if (answer.warnings?.length) {
+      const warnings = document.createElement("div");
+      warnings.className = "ai-meta-list";
+      answer.warnings.forEach((warning) => {
+        const item = document.createElement("div");
+        item.textContent = `Warning: ${warning}`;
+        warnings.appendChild(item);
+      });
+      card.appendChild(warnings);
+    }
+
+    const citations = message.payload.citations || {};
+    if (citations.web?.length || citations.files?.length) {
+      const list = document.createElement("div");
+      list.className = "ai-citation-list";
+      citations.web?.forEach((citation) => {
+        const item = document.createElement("div");
+        item.append("Web: ", linkElement(citation.url, citation.title));
+        list.appendChild(item);
+      });
+      citations.files?.forEach((citation) => {
+        const item = document.createElement("div");
+        item.textContent = `File search: ${citation.filename || citation.file_id || "context file"}`;
+        list.appendChild(item);
+      });
+      card.appendChild(list);
+    }
+
+    elements.aiChatLog.appendChild(card);
+  });
+
+  elements.aiChatLog.scrollTop = elements.aiChatLog.scrollHeight;
+}
+
+async function askAi(question) {
+  openAiPanel("chat");
+  const prompt = (question || elements.aiQuestionInput.value).trim();
+  if (!prompt) {
+    setAiContextStatus("Ask a question first.");
+    return;
+  }
+  if (!state.ai.sessionReady) {
+    setAiSessionStatus("Connect AI before asking a question.");
+    return;
+  }
+  if (!state.allRows.length) {
+    setAiContextStatus("Run a comparison before asking a question.");
+    return;
+  }
+
+  appendAiMessage("user", { question: prompt });
+  elements.aiQuestionInput.value = "";
+  setAiBusy(true);
+
+  try {
+    if (!state.ai.contextReady || state.ai.contextDirty) {
+      await syncAiContext();
+      setAiBusy(true);
+    }
+    setAiContextStatus("Asking AI...");
+    const selected = currentSelectedRow();
+    const result = await postJson("/api/ai/ask", {
+      question: prompt,
+      selectedParamName: selected ? selected.name : "",
+      focusedParamNames: effectiveFocusNames(),
+      settings: aiSettingsFromInputs()
+    });
+    appendAiMessage("assistant", result);
+    setAiContextStatus("Answer complete. Sources are shown in the response when used.");
+  } catch (error) {
+    appendAiMessage("assistant", {
+      answer: {
+        answer_markdown: `AI request failed: ${error.message}`,
+        referenced_params: [],
+        focus_params_used: effectiveFocusNames(),
+        warnings: [error.message],
+        source_notes: ""
+      },
+      citations: { web: [], files: [] },
+      effectiveSettings: aiSettingsFromInputs()
+    });
+    setAiContextStatus(`AI request failed: ${error.message}`);
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+async function cleanupAi() {
+  if (!state.ai.sessionReady) {
+    return;
+  }
+  setAiBusy(true);
+  try {
+    await postJson("/api/ai/cleanup", {});
+  } catch (_error) {
+    // Local state still gets cleared.
+  } finally {
+    state.ai.sessionReady = false;
+    state.ai.contextReady = false;
+    state.ai.contextDirty = true;
+    state.ai.messages = [];
+    renderAiMessages();
+    setAiSessionStatus("API key not connected");
+    setAiContextStatus("Run a comparison before preparing context.");
+    setAiBusy(false);
   }
 }
 
@@ -945,14 +1489,31 @@ function exportHtml() {
   setStatus("HTML report downloaded.");
 }
 
+function selectRow(rowId) {
+  const previousSelectedName = currentSelectedRow()?.name || "";
+  state.selectedRowId = rowId;
+  highlightSelectedRow();
+  renderDetails(rowById(state.selectedRowId));
+  renderFocusChips();
+
+  const selectedName = currentSelectedRow()?.name || "";
+  if (!state.focusedParamNames.size && previousSelectedName !== selectedName) {
+    markAiContextDirty("Selected param changed. Prepare context before the next AI answer.");
+  }
+}
+
 function handleTableClick(event) {
+  const focusButton = event.target.closest("[data-focus-param]");
+  if (focusButton) {
+    event.stopPropagation();
+    toggleFocusedParam(focusButton.dataset.focusParam);
+    return;
+  }
   const rowElement = event.target.closest("tr[data-row-id]");
   if (!rowElement) {
     return;
   }
-  state.selectedRowId = rowElement.dataset.rowId;
-  highlightSelectedRow();
-  renderDetails(rowById(state.selectedRowId));
+  selectRow(rowElement.dataset.rowId);
 }
 
 function handleTableKeydown(event) {
@@ -964,9 +1525,7 @@ function handleTableKeydown(event) {
     return;
   }
   event.preventDefault();
-  state.selectedRowId = rowElement.dataset.rowId;
-  highlightSelectedRow();
-  renderDetails(rowById(state.selectedRowId));
+  selectRow(rowElement.dataset.rowId);
 }
 
 function handleTableMove(event) {
@@ -1017,14 +1576,93 @@ function initializeEvents() {
 
   elements.exportCsvButton.addEventListener("click", exportCsv);
   elements.exportHtmlButton.addEventListener("click", exportHtml);
+  elements.focusVisibleChangedButton.addEventListener("click", () => {
+    state.filteredRows
+      .filter((row) => row.status === "changed")
+      .forEach((row) => state.focusedParamNames.add(row.name));
+    renderTable();
+    markAiContextDirty("Focused visible changed params. Prepare AI context.");
+  });
+  elements.clearVisibleFocusButton.addEventListener("click", () => {
+    state.filteredRows.forEach((row) => state.focusedParamNames.delete(row.name));
+    renderTable();
+    markAiContextDirty("Visible focus cleared. Prepare AI context.");
+  });
+  elements.toggleFocusSelectedButton.addEventListener("click", () => {
+    const selected = currentSelectedRow();
+    if (selected) {
+      toggleFocusedParam(selected.name);
+    }
+  });
+  elements.openAiButton.addEventListener("click", () => openAiPanel("chat"));
+  elements.aiLauncherButton.addEventListener("click", () => openAiPanel("chat"));
+  elements.closeAiDrawerButton.addEventListener("click", closeAiPanel);
+  elements.aiDrawerBackdrop.addEventListener("click", closeAiPanel);
+  elements.aiTabButtons.forEach((button) => {
+    button.addEventListener("click", () => setAiTab(button.dataset.aiTab));
+  });
+  elements.aiChatConnectButton.addEventListener("click", () => setAiTab("setup"));
+  elements.clearInspectorFocusButton.addEventListener("click", () => {
+    state.focusedParamNames.clear();
+    renderTable();
+    markAiContextDirty("Focus cleared. Prepare AI context.");
+  });
+  elements.clearAllFocusButton.addEventListener("click", () => {
+    state.focusedParamNames.clear();
+    renderTable();
+    markAiContextDirty("Focus cleared. Prepare AI context.");
+  });
+  elements.connectAiButton.addEventListener("click", connectAiSession);
+  elements.prepareAiContextButton.addEventListener("click", () => {
+    syncAiContext().catch(() => {});
+  });
+  elements.cleanupAiButton.addEventListener("click", cleanupAi);
+  elements.askAiButton.addEventListener("click", () => askAi());
+  elements.aiQuestionInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      askAi();
+    }
+  });
+  document.querySelectorAll(".quick-prompt").forEach((button) => {
+    button.addEventListener("click", () => askAi(button.dataset.prompt || button.textContent));
+  });
+  [
+    elements.aiModelInput,
+    elements.aiReasoningInput,
+    elements.aiVerbosityInput,
+    elements.aiMaxTokensInput,
+    elements.aiWebSearchInput,
+    elements.aiWebContextInput,
+    elements.aiLiveWebInput,
+    elements.aiServiceTierInput,
+    elements.aiTemperatureInput
+  ].forEach((element) => {
+    element.addEventListener("input", () => {
+      state.ai.settings = aiSettingsFromInputs();
+    });
+    element.addEventListener("change", () => {
+      state.ai.settings = aiSettingsFromInputs();
+    });
+  });
   elements.resultsBody.addEventListener("click", handleTableClick);
   elements.resultsBody.addEventListener("keydown", handleTableKeydown);
   elements.resultsBody.addEventListener("mousemove", handleTableMove);
   elements.resultsBody.addEventListener("mouseleave", hideTooltip);
   window.addEventListener("scroll", hideTooltip, { passive: true });
   window.addEventListener("resize", hideTooltip);
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.ai.panelOpen) {
+      closeAiPanel();
+    }
+  });
 }
 
 initializeEvents();
 syncFilterAvailability();
 clearDetails();
+renderFocusChips();
+renderAiMessages();
+setAiTab("chat");
+syncAiShellState();
+setAiBusy(false);
