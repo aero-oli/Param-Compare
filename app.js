@@ -68,7 +68,6 @@ const state = {
     panelOpen: false,
     setupOpen: false,
     settingsOpen: false,
-    serverKeyAvailable: false,
     desktopKeyStorageAvailable: false,
     desktopStoredKeyAvailable: false,
     settings: { ...DEFAULT_AI_SETTINGS },
@@ -141,7 +140,6 @@ const elements = {
   aiSetupSheet: document.getElementById("aiSetupSheet"),
   closeAiSetupButton: document.getElementById("closeAiSetupButton"),
   aiSetupIntro: document.getElementById("aiSetupIntro"),
-  useServerAiKeyButton: document.getElementById("useServerAiKeyButton"),
   useStoredAiKeyButton: document.getElementById("useStoredAiKeyButton"),
   manualAiKeyFields: document.getElementById("manualAiKeyFields"),
   openAiKeyInput: document.getElementById("openAiKeyInput"),
@@ -197,7 +195,6 @@ function syncAiShellState() {
   elements.aiSetupBackdrop.hidden = !state.ai.setupOpen;
   elements.aiSettingsPanel.hidden = !state.ai.settingsOpen;
   elements.aiSettingsButton.setAttribute("aria-expanded", state.ai.settingsOpen ? "true" : "false");
-  elements.useServerAiKeyButton.hidden = !state.ai.serverKeyAvailable;
   elements.useStoredAiKeyButton.hidden = !state.ai.desktopStoredKeyAvailable;
   elements.rememberOpenAiKeyInput.disabled = !state.ai.desktopKeyStorageAvailable;
   elements.clearStoredAiKeyButton.hidden = !state.ai.desktopStoredKeyAvailable;
@@ -208,10 +205,8 @@ function syncAiShellState() {
       ? "No desktop key is saved."
       : "Desktop key storage is available only in the packaged app.";
   elements.aiSetupIntro.textContent = state.ai.desktopKeyStorageAvailable
-    ? "Use a saved desktop key, save a new key on this device, or connect with a temporary key for this session."
-    : state.ai.serverKeyAvailable
-      ? "Use the OpenAI key configured on this local server, or enter a temporary key for this browser session."
-      : "Use a temporary OpenAI API key for this local browser session. The key is sent to the local server and kept in memory only.";
+    ? "Use a saved desktop key, save a new key on this device, or connect with a key for this app session."
+    : "Desktop key storage is unavailable. You can still connect with a key for this app session.";
 }
 
 function openAiPanel() {
@@ -235,9 +230,7 @@ function openAiSetup() {
   state.ai.panelOpen = false;
   state.ai.settingsOpen = false;
   syncAiShellState();
-  if (!state.ai.serverKeyAvailable) {
-    elements.openAiKeyInput.focus();
-  }
+  elements.openAiKeyInput.focus();
 }
 
 function closeAiSetup() {
@@ -262,7 +255,6 @@ function closeAiSettings() {
 function setAiBusy(isBusy) {
   state.ai.isBusy = isBusy;
   elements.connectAiButton.disabled = isBusy;
-  elements.useServerAiKeyButton.disabled = isBusy;
   elements.useStoredAiKeyButton.disabled = isBusy;
   elements.clearStoredAiKeyButton.disabled = isBusy;
   elements.askAiButton.disabled = isBusy || !state.ai.sessionReady || !state.allRows.length;
@@ -1211,12 +1203,10 @@ function populateModelOptions(models) {
 async function refreshAiAvailability() {
   try {
     const result = await getJson("/api/openai/status");
-    state.ai.serverKeyAvailable = Boolean(result.serverKeyAvailable);
     state.ai.desktopKeyStorageAvailable = Boolean(result.desktopKeyStorageAvailable);
     state.ai.desktopStoredKeyAvailable = Boolean(result.desktopStoredKeyAvailable);
     syncAiShellState();
   } catch (_error) {
-    state.ai.serverKeyAvailable = false;
     state.ai.desktopKeyStorageAvailable = false;
     state.ai.desktopStoredKeyAvailable = false;
     syncAiShellState();
@@ -1224,25 +1214,18 @@ async function refreshAiAvailability() {
 }
 
 async function connectAiSession(options = {}) {
-  const useServerKey = Boolean(options.useServerKey);
   const useDesktopStoredKey = Boolean(options.useDesktopStoredKey);
-  const apiKey = useServerKey || useDesktopStoredKey ? "" : elements.openAiKeyInput.value.trim();
-  if (!useServerKey && !useDesktopStoredKey && !apiKey) {
+  const apiKey = useDesktopStoredKey ? "" : elements.openAiKeyInput.value.trim();
+  if (!useDesktopStoredKey && !apiKey) {
     setAiSessionStatus("Enter an OpenAI API key first.");
     openAiSetup();
     return;
   }
 
   setAiBusy(true);
-  setAiSessionStatus(useServerKey
-    ? "Connecting with local OpenAI key..."
-    : useDesktopStoredKey
-      ? "Connecting with saved desktop key..."
-      : "Validating API key...");
+  setAiSessionStatus(useDesktopStoredKey ? "Connecting with saved desktop key..." : "Validating API key...");
   try {
-    const payload = useServerKey
-      ? { useServerKey: true }
-      : useDesktopStoredKey
+    const payload = useDesktopStoredKey
         ? { useDesktopStoredKey: true }
         : { apiKey, rememberApiKey: elements.rememberOpenAiKeyInput.checked };
     const result = await postJson("/api/openai/session", payload);
@@ -1256,13 +1239,11 @@ async function connectAiSession(options = {}) {
     if (result.recommendedModel && !elements.aiModelInput.value.trim()) {
       elements.aiModelInput.value = result.recommendedModel;
     }
-    setAiSessionStatus(result.source === "environment"
-      ? "AI connected with local server key."
-      : result.source === "desktop"
+    setAiSessionStatus(result.source === "desktop"
         ? "AI connected with saved desktop key."
         : result.desktopStoredKeyAvailable
           ? "AI connected. API key saved on this device."
-          : "AI connected. API key is held in backend memory only.");
+          : "AI connected. API key is held in memory for this app session.");
     setAiContextStatus(state.allRows.length ? "Preparing comparison context..." : "Run a comparison before asking.");
     if (state.allRows.length) {
       await syncAiContext();
@@ -2132,7 +2113,6 @@ function initializeEvents() {
     markAiContextDirty("Ask about selection cleared. Context will refresh before the next answer.");
   });
   elements.connectAiButton.addEventListener("click", () => connectAiSession());
-  elements.useServerAiKeyButton.addEventListener("click", () => connectAiSession({ useServerKey: true }));
   elements.useStoredAiKeyButton.addEventListener("click", () => connectAiSession({ useDesktopStoredKey: true }));
   elements.clearStoredAiKeyButton.addEventListener("click", clearStoredAiKey);
   elements.cleanupAiButton.addEventListener("click", cleanupAi);

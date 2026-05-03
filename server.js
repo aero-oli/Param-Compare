@@ -5,8 +5,6 @@ const path = require("path");
 const express = require("express");
 
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const PORT = Number(process.env.PORT || 8000);
 const SESSION_COOKIE = "param_compare_ai_session";
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 const MAX_CONTEXT_ROWS = 6000;
@@ -770,14 +768,15 @@ async function validateApiKey(apiKey) {
 
 function createApp(options = {}) {
   const validateApiKeyImpl = options.validateApiKey || validateApiKey;
-  const serverApiKey = options.openAiApiKey !== undefined ? options.openAiApiKey : OPENAI_API_KEY;
-  const desktopKeyStore = options.desktopKeyStore || null;
+  const desktopKeyStore = options.desktopKeyStore;
+  if (!desktopKeyStore) {
+    throw new Error("Param Compare must be hosted by Electron with desktop key storage.");
+  }
   const app = express();
   app.use(express.json({ limit: "25mb" }));
 
   app.get("/api/openai/status", (_req, res) => {
     res.json({
-      serverKeyAvailable: Boolean(serverApiKey),
       desktopKeyStorageAvailable: Boolean(desktopKeyStore?.isAvailable()),
       desktopStoredKeyAvailable: Boolean(desktopKeyStore?.hasKey())
     });
@@ -799,15 +798,12 @@ function createApp(options = {}) {
   app.post("/api/openai/session", async (req, res) => {
     const providedApiKey = normalizeName(req.body?.apiKey);
     const wantsDesktopStoredKey = req.body?.useDesktopStoredKey === true;
-    const wantsServerKey = req.body?.useServerKey === true || (!providedApiKey && !wantsDesktopStoredKey);
     const apiKey = wantsDesktopStoredKey
       ? normalizeName(desktopKeyStore?.getKey())
-      : wantsServerKey
-        ? normalizeName(serverApiKey)
-        : providedApiKey;
-    const source = wantsDesktopStoredKey ? "desktop" : wantsServerKey ? "environment" : "manual";
+      : providedApiKey;
+    const source = wantsDesktopStoredKey ? "desktop" : "manual";
     if (!apiKey) {
-      res.status(400).json({ error: "Enter an OpenAI API key, use a saved desktop key, or configure OPENAI_API_KEY on the server." });
+      res.status(400).json({ error: "Enter an OpenAI API key or use a saved desktop key." });
       return;
     }
     try {
@@ -892,9 +888,8 @@ function createApp(options = {}) {
 }
 
 if (require.main === module) {
-  createApp().listen(PORT, () => {
-    console.log(`Param Compare running at http://127.0.0.1:${PORT}/`);
-  });
+  console.error("Param Compare is an Electron desktop app. Run `npm run desktop`.");
+  process.exit(1);
 }
 
 module.exports = {

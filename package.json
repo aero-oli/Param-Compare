@@ -9,7 +9,6 @@
     "desktop": "electron .",
     "dist": "electron-builder -c.forceCodeSigning=true",
     "pack": "electron-builder --dir -c.win.signAndEditExecutable=false",
-    "start": "node server.js",
     "test": "node --test"
   },
   "dependencies": {

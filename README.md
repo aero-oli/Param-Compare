@@ -1,25 +1,24 @@
 # ArduPilot Param Compare
 
-Browser-based ArduPilot parameter diff tool for comparing two ArduCopter
-parameter files with metadata decode, filtering, exports, and an optional
-OpenAI-powered parameter assistant.
+Desktop ArduPilot parameter diff tool for comparing two ArduCopter parameter
+files with metadata decode, filtering, exports, and an optional OpenAI-powered
+parameter assistant.
 
 ## Features
 
 - Compare old and new `.param`, `.parm`, `.params`, `.txt`, `.cfg`, or log-style
-  parameter files in the browser
+  parameter files
 - Highlight changed, added, removed, and unchanged parameters
 - Decode metadata from ArduPilot `apm.pdef.json` or `apm.pdef.xml`
 - Load latest ArduCopter metadata, versioned metadata, or a local metadata file
 - Search and filter by parameter name, value, enum, notes, or description
 - Inspect descriptions, ranges, units, enum values, bitmasks, and reboot notes
 - Export the visible comparison as CSV or HTML
-- Focus selected parameters and ask an optional AI assistant about the loaded
-  comparison context
+- Ask an optional AI assistant about selected parameters and row-level changes
 
 ## Requirements
 
-- Node.js with built-in `fetch`, `FormData`, and `Blob` support
+- Node.js
 - npm
 - Optional: an OpenAI API key for the AI assistant
 
@@ -29,33 +28,15 @@ OpenAI-powered parameter assistant.
 npm install
 ```
 
-## Run Locally
-
-```bash
-npm start
-```
-
-Then open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
-
-To use a different port:
-
-```bash
-PORT=8080 npm start
-```
-
-## Run as a Desktop App
+## Run Desktop App
 
 ```bash
 npm run desktop
 ```
 
-The Electron app starts the existing Express server on a random local loopback
-port and opens it in a native desktop window.
-
-Desktop builds can remember the optional OpenAI API key on the current device.
-Saved keys are encrypted with Electron's `safeStorage` support and stored under
-the app's user data directory. The browser version still keeps pasted keys in
-backend memory only.
+The Electron app starts the private Express backend on a random loopback port and
+opens the UI in a native desktop window. The backend is an implementation detail
+of the desktop app and is not intended to be run as a standalone browser server.
 
 ## Build Desktop Packages
 
@@ -64,12 +45,10 @@ npm run pack
 npm run dist
 ```
 
-`npm run pack` creates an unpacked app for local inspection. `npm run dist`
-creates the configured Windows, macOS, or Linux package for the host platform in
-`release/`.
+`npm run pack` creates an unsigned unpacked app for local inspection in
+`release/`. `npm run dist` creates the configured Windows, macOS, or Linux
+package for the host platform and requires signing credentials.
 
-For public signed releases, provide platform signing credentials through
-electron-builder's standard environment variables before running `npm run dist`.
 Windows builds use the NSIS target. macOS builds use hardened runtime and require
 Developer ID signing plus notarization credentials for distribution outside a
 development machine.
@@ -106,7 +85,7 @@ You can also load a local `apm.pdef.json` or `apm.pdef.xml` file. Local metadata
 is useful when remote fetching is blocked, when a published version is missing,
 or when comparing against custom firmware metadata.
 
-Fetched metadata is cached in browser `localStorage` by URL so repeat
+Fetched metadata is cached in Electron's renderer storage by URL so repeat
 comparisons can still work if the network is unavailable.
 
 ## AI Assistant
@@ -117,17 +96,17 @@ To use it:
 
 1. Run a comparison.
 2. Open the `AI` drawer.
-3. Connect with the server's `OPENAI_API_KEY`, or enter a temporary OpenAI API
-   key for the local session.
+3. Use a saved desktop key, or enter an OpenAI API key for the current app
+   session.
 4. Select a parameter or add rows to `Ask about`.
-5. Ask a question from the chat drawer.
+5. Ask a question from the chat drawer or use a row AI action.
 
-The backend keeps the API key in server memory only and stores a session cookie
-named `param_compare_ai_session` in the browser. Sessions expire after eight
-hours or when you disconnect.
+Saved keys are encrypted with Electron's `safeStorage` support and stored under
+the app's user data directory. Unsaved keys are held in backend memory for the
+current app session and cleared when you disconnect or close the app.
 
 When AI context is prepared, the backend keeps the loaded comparison and metadata
-in the local session and exposes it to the model through structured tools.
+in the local app session and exposes it to the model through structured tools.
 
 AI context is prepared automatically after connection, after comparison changes,
 and before an answer if the selected rows changed. Advanced settings are hidden
@@ -139,20 +118,18 @@ context size, and live web access.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `8000` | Local Express server port |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
-| `OPENAI_API_KEY` | unset | Optional server-side key for one-click local AI setup |
 
 ## Project Structure
 
 ```text
 .
-├── app.js              # Browser comparison UI and client-side parsing/export logic
+├── app.js               # Renderer comparison UI and client-side parsing/export logic
 ├── desktop-key-store.js # Electron encrypted desktop settings storage
-├── electron-main.js    # Electron shell that hosts the local Express app
-├── index.html          # App shell
-├── server.js           # Express server and AI assistant endpoints
-├── styles.css          # App styling
+├── electron-main.js     # Electron shell that hosts the private Express backend
+├── index.html           # App shell
+├── server.js            # Private Express backend and AI assistant endpoints
+├── styles.css           # App styling
 ├── tests/server.test.js
 ├── package.json
 └── README.md
@@ -160,8 +137,9 @@ context size, and live web access.
 
 ## Notes
 
-- Parameter comparison and exports happen in the browser.
-- AI calls and in-memory comparison context go through the local Express server.
+- Parameter comparison and exports happen in the Electron renderer.
+- AI calls and in-memory comparison context go through the private Express
+  backend hosted by Electron.
 - Treat AI output as assistance, not flight-safety certainty. Check important
   changes against official ArduPilot documentation, metadata, source, and
   controlled validation.

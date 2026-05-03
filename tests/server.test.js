@@ -82,6 +82,24 @@ async function withTestServer(app, run) {
   }
 }
 
+function createMemoryDesktopKeyStore(initialKey = "") {
+  let savedKey = initialKey;
+  return {
+    clearKey: () => {
+      savedKey = "";
+    },
+    getKey: () => savedKey,
+    hasKey: () => Boolean(savedKey),
+    isAvailable: () => true,
+    setKey: (apiKey) => {
+      savedKey = apiKey;
+    },
+    get savedKey() {
+      return savedKey;
+    }
+  };
+}
+
 test("statusCounts counts comparison statuses", () => {
   assert.deepEqual(statusCounts(sampleRows), {
     changed: 1,
@@ -194,9 +212,13 @@ test("isolated asks do not consume or update conversation response state", () =>
   assert.equal(session.previousResponseId, "resp_chat");
 });
 
-test("OpenAI status reports when a server API key is available", async () => {
+test("createApp requires Electron desktop key storage", () => {
+  assert.throws(() => createApp(), /hosted by Electron/);
+});
+
+test("OpenAI status reports desktop key availability", async () => {
   const app = createApp({
-    openAiApiKey: "sk-test-server",
+    desktopKeyStore: createMemoryDesktopKeyStore("sk-saved"),
     validateApiKey: async () => ["gpt-5.4-mini"]
   });
 
@@ -204,55 +226,16 @@ test("OpenAI status reports when a server API key is available", async () => {
     const response = await fetch(`${baseUrl}/api/openai/status`);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
-      serverKeyAvailable: true,
-      desktopKeyStorageAvailable: false,
-      desktopStoredKeyAvailable: false
+      desktopKeyStorageAvailable: true,
+      desktopStoredKeyAvailable: true
     });
-  });
-});
-
-test("OpenAI session can use the server environment key", async () => {
-  const app = createApp({
-    openAiApiKey: "sk-test-server",
-    validateApiKey: async (apiKey) => {
-      assert.equal(apiKey, "sk-test-server");
-      return ["gpt-5.4-mini", "gpt-5.4"];
-    }
-  });
-
-  await withTestServer(app, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/openai/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ useServerKey: true })
-    });
-    const body = await response.json();
-
-    assert.equal(response.status, 200);
-    assert.equal(body.ok, true);
-    assert.equal(body.source, "environment");
-    assert.equal(body.desktopStoredKeyAvailable, false);
-    assert.equal(body.recommendedModel, "gpt-5.4-mini");
-    assert.match(response.headers.get("set-cookie"), /param_compare_ai_session=/);
   });
 });
 
 test("OpenAI session can save and use a desktop stored key", async () => {
-  let savedKey = "";
-  const desktopKeyStore = {
-    clearKey: () => {
-      savedKey = "";
-    },
-    getKey: () => savedKey,
-    hasKey: () => Boolean(savedKey),
-    isAvailable: () => true,
-    setKey: (apiKey) => {
-      savedKey = apiKey;
-    }
-  };
+  const desktopKeyStore = createMemoryDesktopKeyStore();
   const seenKeys = [];
   const app = createApp({
-    openAiApiKey: "",
     desktopKeyStore,
     validateApiKey: async (apiKey) => {
       seenKeys.push(apiKey);
@@ -263,7 +246,6 @@ test("OpenAI session can save and use a desktop stored key", async () => {
   await withTestServer(app, async (baseUrl) => {
     const initialStatus = await fetch(`${baseUrl}/api/openai/status`);
     assert.deepEqual(await initialStatus.json(), {
-      serverKeyAvailable: false,
       desktopKeyStorageAvailable: true,
       desktopStoredKeyAvailable: false
     });
@@ -292,13 +274,13 @@ test("OpenAI session can save and use a desktop stored key", async () => {
       method: "POST"
     });
     assert.equal(clearResponse.status, 200);
-    assert.equal(savedKey, "");
+    assert.equal(desktopKeyStore.savedKey, "");
   });
 });
 
-test("OpenAI session still accepts a pasted temporary key and cleanup clears it", async () => {
+test("OpenAI session still accepts an entered key and cleanup clears it", async () => {
   const app = createApp({
-    openAiApiKey: "",
+    desktopKeyStore: createMemoryDesktopKeyStore(),
     validateApiKey: async (apiKey) => {
       assert.equal(apiKey, "sk-test-manual");
       return ["gpt-5.4-mini"];
