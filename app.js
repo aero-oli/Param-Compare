@@ -13,6 +13,8 @@ const STATUS_LABELS = {
 const FLOAT_REL_TOL = 1e-9;
 const FLOAT_ABS_TOL = 1e-12;
 const CACHE_PREFIX = "ardupilot-param-compare-cache:";
+const THEME_STORAGE_KEY = "ardupilot-param-compare-theme";
+const SYSTEM_THEME_QUERY = "(prefers-color-scheme: dark)";
 const TOOLTIP_OFFSET = 16;
 const DEFAULT_AI_SETTINGS = {
   model: "gpt-5.4-mini",
@@ -49,6 +51,7 @@ const ROW_AI_ACTIONS = [
 ];
 
 const state = {
+  activeView: "compare",
   allRows: [],
   filteredRows: [],
   metadata: new Map(),
@@ -66,8 +69,6 @@ const state = {
     contextDirty: true,
     isBusy: false,
     panelOpen: false,
-    setupOpen: false,
-    settingsOpen: false,
     desktopKeyStorageAvailable: false,
     desktopStoredKeyAvailable: false,
     settings: { ...DEFAULT_AI_SETTINGS },
@@ -88,6 +89,10 @@ const state = {
 };
 
 const elements = {
+  compareView: document.getElementById("compareView"),
+  settingsView: document.getElementById("settingsView"),
+  compareNavButton: document.getElementById("compareNavButton"),
+  settingsNavButton: document.getElementById("settingsNavButton"),
   oldFileInput: document.getElementById("oldFileInput"),
   newFileInput: document.getElementById("newFileInput"),
   metadataFileInput: document.getElementById("metadataFileInput"),
@@ -109,6 +114,7 @@ const elements = {
   clearVisibleFocusButton: document.getElementById("clearVisibleFocusButton"),
   resultsBody: document.getElementById("resultsBody"),
   statusText: document.getElementById("statusText"),
+  themePreferenceInput: document.getElementById("themePreferenceInput"),
   metadataStatusText: document.getElementById("metadataStatusText"),
   summaryChanged: document.getElementById("summaryChanged"),
   summaryAdded: document.getElementById("summaryAdded"),
@@ -134,14 +140,7 @@ const elements = {
   aiAssistantDrawer: document.getElementById("aiAssistantDrawer"),
   closeAiDrawerButton: document.getElementById("closeAiDrawerButton"),
   aiSettingsButton: document.getElementById("aiSettingsButton"),
-  aiSettingsPanel: document.getElementById("aiSettingsPanel"),
-  closeAiSettingsButton: document.getElementById("closeAiSettingsButton"),
-  aiSetupBackdrop: document.getElementById("aiSetupBackdrop"),
-  aiSetupSheet: document.getElementById("aiSetupSheet"),
-  closeAiSetupButton: document.getElementById("closeAiSetupButton"),
-  aiSetupIntro: document.getElementById("aiSetupIntro"),
   useStoredAiKeyButton: document.getElementById("useStoredAiKeyButton"),
-  manualAiKeyFields: document.getElementById("manualAiKeyFields"),
   openAiKeyInput: document.getElementById("openAiKeyInput"),
   rememberOpenAiKeyInput: document.getElementById("rememberOpenAiKeyInput"),
   clearStoredAiKeyButton: document.getElementById("clearStoredAiKeyButton"),
@@ -169,6 +168,46 @@ const elements = {
   rowAiLayer: document.getElementById("rowAiLayer")
 };
 
+const systemThemeMedia = window.matchMedia(SYSTEM_THEME_QUERY);
+
+function storedThemePreference() {
+  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  return ["system", "light", "dark"].includes(stored) ? stored : "system";
+}
+
+function resolvedTheme(preference) {
+  if (preference === "dark" || preference === "light") {
+    return preference;
+  }
+  return systemThemeMedia.matches ? "dark" : "light";
+}
+
+function applyThemePreference(preference) {
+  const nextPreference = ["system", "light", "dark"].includes(preference) ? preference : "system";
+  document.documentElement.dataset.themePreference = nextPreference;
+  document.documentElement.dataset.theme = resolvedTheme(nextPreference);
+  localStorage.setItem(THEME_STORAGE_KEY, nextPreference);
+  elements.themePreferenceInput.value = nextPreference;
+}
+
+function syncView() {
+  const isSettings = state.activeView === "settings";
+  elements.compareView.hidden = isSettings;
+  elements.settingsView.hidden = !isSettings;
+  elements.compareNavButton.classList.toggle("is-active", !isSettings);
+  elements.settingsNavButton.classList.toggle("is-active", isSettings);
+  elements.compareNavButton.setAttribute("aria-current", isSettings ? "false" : "page");
+  elements.settingsNavButton.setAttribute("aria-current", isSettings ? "page" : "false");
+}
+
+function showView(view) {
+  state.activeView = view === "settings" ? "settings" : "compare";
+  if (state.activeView === "settings") {
+    closeAiPanel();
+  }
+  syncView();
+}
+
 function setStatus(text) {
   elements.statusText.textContent = text;
 }
@@ -191,10 +230,6 @@ function syncAiShellState() {
   elements.aiAssistantDrawer.inert = !state.ai.panelOpen;
   elements.aiLauncherButton.setAttribute("aria-expanded", state.ai.panelOpen ? "true" : "false");
   elements.aiDrawerBackdrop.hidden = !state.ai.panelOpen;
-  elements.aiSetupSheet.hidden = !state.ai.setupOpen;
-  elements.aiSetupBackdrop.hidden = !state.ai.setupOpen;
-  elements.aiSettingsPanel.hidden = !state.ai.settingsOpen;
-  elements.aiSettingsButton.setAttribute("aria-expanded", state.ai.settingsOpen ? "true" : "false");
   elements.useStoredAiKeyButton.hidden = !state.ai.desktopStoredKeyAvailable;
   elements.rememberOpenAiKeyInput.disabled = !state.ai.desktopKeyStorageAvailable;
   elements.clearStoredAiKeyButton.hidden = !state.ai.desktopStoredKeyAvailable;
@@ -204,9 +239,6 @@ function syncAiShellState() {
     : state.ai.desktopKeyStorageAvailable
       ? "No desktop key is saved."
       : "Desktop key storage is available only in the packaged app.";
-  elements.aiSetupIntro.textContent = state.ai.desktopKeyStorageAvailable
-    ? "Use a saved desktop key, save a new key on this device, or connect with a key for this app session."
-    : "Desktop key storage is unavailable. You can still connect with a key for this app session.";
 }
 
 function openAiPanel() {
@@ -215,40 +247,35 @@ function openAiPanel() {
     return;
   }
   state.ai.panelOpen = true;
-  state.ai.setupOpen = false;
   syncAiShellState();
 }
 
 function closeAiPanel() {
   state.ai.panelOpen = false;
-  state.ai.settingsOpen = false;
   syncAiShellState();
 }
 
 function openAiSetup() {
-  state.ai.setupOpen = true;
+  state.activeView = "settings";
   state.ai.panelOpen = false;
-  state.ai.settingsOpen = false;
+  setAiSessionStatus("Connect AI from Settings.");
+  syncView();
   syncAiShellState();
   elements.openAiKeyInput.focus();
 }
 
 function closeAiSetup() {
-  state.ai.setupOpen = false;
   syncAiShellState();
 }
 
-function toggleAiSettings() {
-  if (!state.ai.sessionReady) {
-    openAiSetup();
-    return;
-  }
-  state.ai.settingsOpen = !state.ai.settingsOpen;
+function openSettingsFromAi() {
+  state.activeView = "settings";
+  state.ai.panelOpen = false;
+  syncView();
   syncAiShellState();
 }
 
 function closeAiSettings() {
-  state.ai.settingsOpen = false;
   syncAiShellState();
 }
 
@@ -1808,7 +1835,6 @@ async function cleanupAi() {
     state.ai.sessionReady = false;
     state.ai.contextReady = false;
     state.ai.contextDirty = true;
-    state.ai.settingsOpen = false;
     state.ai.messages = [];
     renderAiMessages();
     setAiSessionStatus("AI not connected");
@@ -2049,7 +2075,17 @@ function handleTableMove(event) {
 }
 
 function initializeEvents() {
+  elements.compareNavButton.addEventListener("click", () => showView("compare"));
+  elements.settingsNavButton.addEventListener("click", () => showView("settings"));
   elements.compareButton.addEventListener("click", compareFiles);
+  elements.themePreferenceInput.addEventListener("change", () => {
+    applyThemePreference(elements.themePreferenceInput.value);
+  });
+  systemThemeMedia.addEventListener("change", () => {
+    if (storedThemePreference() === "system") {
+      applyThemePreference("system");
+    }
+  });
   elements.resetVersionButton.addEventListener("click", () => {
     elements.versionRefInput.value = "";
     elements.metadataUrlInput.value = DEFAULT_METADATA_URL;
@@ -2101,10 +2137,7 @@ function initializeEvents() {
   elements.aiLauncherButton.addEventListener("click", openAiPanel);
   elements.closeAiDrawerButton.addEventListener("click", closeAiPanel);
   elements.aiDrawerBackdrop.addEventListener("click", closeAiPanel);
-  elements.aiSettingsButton.addEventListener("click", toggleAiSettings);
-  elements.closeAiSettingsButton.addEventListener("click", closeAiSettings);
-  elements.closeAiSetupButton.addEventListener("click", closeAiSetup);
-  elements.aiSetupBackdrop.addEventListener("click", closeAiSetup);
+  elements.aiSettingsButton.addEventListener("click", openSettingsFromAi);
   elements.clearInspectorFocusButton.addEventListener("click", () => {
     state.focusedParamNames.clear();
     syncAiContextSelection("AI context cleared. Context will refresh before the next answer.");
@@ -2176,10 +2209,6 @@ function initializeEvents() {
     }
     if (state.rowAi.activeMenuRowId || state.rowAi.popoverRowId) {
       closeRowAi();
-    } else if (state.ai.settingsOpen) {
-      closeAiSettings();
-    } else if (state.ai.setupOpen) {
-      closeAiSetup();
     } else if (state.ai.panelOpen) {
       closeAiPanel();
     }
@@ -2187,6 +2216,8 @@ function initializeEvents() {
 }
 
 initializeEvents();
+applyThemePreference(storedThemePreference());
+syncView();
 syncFilterAvailability();
 clearDetails();
 renderFocusChips();

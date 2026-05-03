@@ -8,15 +8,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>
+    (() => {
+      const themePreference = localStorage.getItem("ardupilot-param-compare-theme") || "system";
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.themePreference = themePreference;
+      document.documentElement.dataset.theme = themePreference === "system" ? (prefersDark ? "dark" : "light") : themePreference;
+    })();
+  </script>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="app-header">
-      <div>
-        <p class="eyebrow">PARAM_DIFF</p>
+      <div class="brand-block">
         <h1>ArduPilot Parameter Compare</h1>
-        <p class="subhead">Old/new parameter diff with metadata decode.</p>
+        <nav class="app-nav" aria-label="App views">
+          <button id="compareNavButton" class="nav-button is-active" type="button" data-view-target="compare">Compare</button>
+          <button id="settingsNavButton" class="nav-button" type="button" data-view-target="settings">Settings</button>
+        </nav>
       </div>
       <div class="header-status">
         <span class="status-dot" aria-hidden="true"></span>
@@ -24,7 +34,7 @@
       </div>
     </header>
 
-    <main class="workspace">
+    <main id="compareView" class="workspace app-view">
       <section class="control-panel">
         <div class="setup-header">
           <div>
@@ -50,41 +60,6 @@
             <input id="metadataFileInput" type="file" accept=".json,.xml,text/xml,application/json">
           </label>
         </div>
-
-        <details class="advanced-panel">
-          <summary>Metadata and comparison options</summary>
-          <div class="control-grid">
-            <label class="field">
-              <span>ArduCopter version/ref</span>
-              <input id="versionRefInput" type="text" placeholder="4.5.7 or stable-4.5.7">
-            </label>
-
-            <label class="field field-wide">
-              <span>Metadata URL</span>
-              <input id="metadataUrlInput" type="text" value="https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.json">
-            </label>
-
-            <label class="field">
-              <span>Ignore params</span>
-              <input id="ignoreInput" type="text" placeholder="FORMAT_VERSION, LOG_LASTFILE">
-            </label>
-
-            <label class="field">
-              <span>Sort by</span>
-              <select id="sortByInput">
-                <option value="name">Name</option>
-                <option value="status">Change type</option>
-              </select>
-            </label>
-
-            <label class="check-field">
-              <input id="showSameInput" type="checkbox">
-              <span>Include unchanged parameters</span>
-            </label>
-
-            <button id="resetVersionButton" class="ghost-button inline-action" type="button">Use latest metadata</button>
-          </div>
-        </details>
 
         <div class="status-row">
           <div>
@@ -209,6 +184,146 @@
         </aside>
       </section>
     </main>
+
+    <main id="settingsView" class="settings-page app-view" hidden>
+      <section class="settings-section">
+        <div class="settings-section-header">
+          <h2>Appearance</h2>
+          <p>Choose the app theme used across the compare table, inspector, and AI surfaces.</p>
+        </div>
+        <div class="settings-grid">
+          <label class="field">
+            <span>Theme</span>
+            <select id="themePreferenceInput">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-header">
+          <h2>AI</h2>
+          <p>Defaults used by row AI and the chat drawer.</p>
+        </div>
+        <div class="settings-grid ai-settings-grid">
+          <label class="field">
+            <span>Model</span>
+            <input id="aiModelInput" type="text" list="aiModelOptions" value="gpt-5.4-mini">
+            <datalist id="aiModelOptions"></datalist>
+          </label>
+          <label class="field">
+            <span>Reasoning effort</span>
+            <select id="aiReasoningInput">
+              <option value="minimal">Minimal</option>
+              <option value="low" selected>Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="xhigh">Extra high</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Verbosity</span>
+            <select id="aiVerbosityInput">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Max output tokens</span>
+            <input id="aiMaxTokensInput" type="number" min="600" max="12000" step="100" value="2400">
+          </label>
+          <label class="check-field">
+            <input id="aiWebSearchInput" type="checkbox" checked>
+            <span>Use web search</span>
+          </label>
+          <label class="field">
+            <span>Web context</span>
+            <select id="aiWebContextInput">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high" selected>High</option>
+            </select>
+          </label>
+          <label class="check-field">
+            <input id="aiLiveWebInput" type="checkbox" checked>
+            <span>Live web access</span>
+          </label>
+          <label class="field">
+            <span>Service tier</span>
+            <select id="aiServiceTierInput">
+              <option value="auto" selected>Auto</option>
+              <option value="flex">Flex</option>
+              <option value="fast">Fast</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Temperature</span>
+            <input id="aiTemperatureInput" type="number" min="0" max="2" step="0.1" placeholder="model default">
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-header">
+          <h2>AI key</h2>
+          <p>Connect this desktop app to OpenAI, or manage the saved key on this device.</p>
+        </div>
+        <div class="settings-grid key-settings-grid">
+          <button id="useStoredAiKeyButton" class="primary-button" type="button" hidden>Use saved desktop key</button>
+          <label class="field field-wide">
+            <span>OpenAI API key</span>
+            <input id="openAiKeyInput" type="password" placeholder="sk-...">
+          </label>
+          <label class="check-field">
+            <input id="rememberOpenAiKeyInput" type="checkbox">
+            <span>Remember this key on this device</span>
+          </label>
+          <div class="settings-action-row">
+            <button id="connectAiButton" class="primary-button" type="button">Connect AI</button>
+            <button id="cleanupAiButton" class="ghost-button" type="button">Disconnect</button>
+            <button id="clearStoredAiKeyButton" class="text-button" type="button" hidden>Forget saved key</button>
+            <span id="storedAiKeyStatus" class="ai-stored-key-status" hidden></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-header">
+          <h2>Comparison defaults</h2>
+          <p>Defaults used when loading metadata and filtering comparison results.</p>
+        </div>
+        <div class="settings-grid comparison-settings-grid">
+          <label class="field">
+            <span>ArduCopter version/ref</span>
+            <input id="versionRefInput" type="text" placeholder="4.5.7 or stable-4.5.7">
+          </label>
+          <label class="field field-wide">
+            <span>Metadata URL</span>
+            <input id="metadataUrlInput" type="text" value="https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.json">
+          </label>
+          <label class="field">
+            <span>Ignore params</span>
+            <input id="ignoreInput" type="text" placeholder="FORMAT_VERSION, LOG_LASTFILE">
+          </label>
+          <label class="field">
+            <span>Sort by</span>
+            <select id="sortByInput">
+              <option value="name">Name</option>
+              <option value="status">Change type</option>
+            </select>
+          </label>
+          <label class="check-field">
+            <input id="showSameInput" type="checkbox">
+            <span>Include unchanged parameters</span>
+          </label>
+          <button id="resetVersionButton" class="ghost-button inline-action" type="button">Use latest metadata</button>
+        </div>
+      </section>
+    </main>
   </div>
 
   <div id="tooltip" class="tooltip" hidden></div>
@@ -225,8 +340,7 @@
         <h2>AI chat</h2>
       </div>
       <div class="ai-drawer-actions">
-        <button id="aiSettingsButton" class="ghost-button" type="button" aria-controls="aiSettingsPanel" aria-expanded="false">Settings</button>
-        <button id="cleanupAiButton" class="ghost-button" type="button">Disconnect</button>
+        <button id="aiSettingsButton" class="ghost-button" type="button">Settings</button>
       </div>
       <button id="closeAiDrawerButton" class="icon-button" type="button" aria-label="Close AI assistant">×</button>
     </div>
@@ -265,104 +379,6 @@
       </div>
     </section>
   </aside>
-
-  <div id="aiSetupBackdrop" class="ai-modal-backdrop" hidden></div>
-
-  <section id="aiSetupSheet" class="ai-setup-sheet" role="dialog" aria-modal="true" aria-labelledby="aiSetupTitle" hidden>
-    <div class="ai-sheet-header">
-      <div>
-        <p class="eyebrow">AI setup</p>
-        <h2 id="aiSetupTitle">Connect once, then just ask</h2>
-      </div>
-      <button id="closeAiSetupButton" class="icon-button" type="button" aria-label="Close AI setup">×</button>
-    </div>
-    <p id="aiSetupIntro" class="ai-setup-copy">Use a saved desktop key, save a new key on this device, or connect with a key for this app session.</p>
-    <div class="ai-setup-actions">
-      <button id="useStoredAiKeyButton" class="primary-button" type="button" hidden>Use saved desktop key</button>
-      <div id="manualAiKeyFields" class="ai-key-fields">
-        <label class="field">
-          <span>OpenAI API key</span>
-          <input id="openAiKeyInput" type="password" placeholder="sk-...">
-        </label>
-        <label class="ai-save-key-option">
-          <input id="rememberOpenAiKeyInput" type="checkbox">
-          <span>Remember this key on this device</span>
-        </label>
-        <div class="ai-stored-key-row">
-          <span id="storedAiKeyStatus" class="ai-stored-key-status" hidden></span>
-          <button id="clearStoredAiKeyButton" class="text-button" type="button" hidden>Forget saved key</button>
-        </div>
-        <button id="connectAiButton" class="primary-button" type="button">Connect AI</button>
-      </div>
-    </div>
-  </section>
-
-  <section id="aiSettingsPanel" class="ai-settings-panel-drawer" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle" hidden>
-    <div class="ai-sheet-header">
-      <div>
-        <p class="eyebrow">AI settings</p>
-        <h2 id="aiSettingsTitle">Advanced defaults</h2>
-      </div>
-      <button id="closeAiSettingsButton" class="icon-button" type="button" aria-label="Close AI settings">×</button>
-    </div>
-      <div class="ai-settings-grid">
-        <label class="field">
-          <span>Model</span>
-          <input id="aiModelInput" type="text" list="aiModelOptions" value="gpt-5.4-mini">
-          <datalist id="aiModelOptions"></datalist>
-        </label>
-        <label class="field">
-          <span>Reasoning effort</span>
-          <select id="aiReasoningInput">
-            <option value="minimal">Minimal</option>
-            <option value="low" selected>Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="xhigh">Extra high</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Verbosity</span>
-          <select id="aiVerbosityInput">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Max output tokens</span>
-          <input id="aiMaxTokensInput" type="number" min="600" max="12000" step="100" value="2400">
-        </label>
-        <label class="check-field">
-          <input id="aiWebSearchInput" type="checkbox" checked>
-          <span>Use web search</span>
-        </label>
-        <label class="field">
-          <span>Web context</span>
-          <select id="aiWebContextInput">
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high" selected>High</option>
-          </select>
-        </label>
-        <label class="check-field">
-          <input id="aiLiveWebInput" type="checkbox" checked>
-          <span>Live web access</span>
-        </label>
-        <label class="field">
-          <span>Service tier</span>
-          <select id="aiServiceTierInput">
-            <option value="auto" selected>Auto</option>
-            <option value="flex">Flex</option>
-            <option value="fast">Fast</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Temperature</span>
-          <input id="aiTemperatureInput" type="number" min="0" max="2" step="0.1" placeholder="model default">
-        </label>
-      </div>
-  </section>
 
   <script src="./vendor/marked.umd.js"></script>
   <script src="./app.js"></script>

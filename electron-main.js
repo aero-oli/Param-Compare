@@ -35,7 +35,13 @@ async function createMainWindow() {
     minWidth: 980,
     minHeight: 680,
     title: "ArduPilot Param Compare",
-    backgroundColor: "#f6f4ef",
+    backgroundColor: "#151a1f",
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#151a1f",
+      symbolColor: "#eef3f6",
+      height: 32
+    },
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
