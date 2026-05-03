@@ -2280,6 +2280,443 @@ thead th {
   }
 }
 
+/* Compact technical workspace: keep the parameter table as the dominant surface. */
+:root {
+  --bg: #edf1f4;
+  --surface-subtle: #f4f7f9;
+  --shadow: none;
+}
+
+html,
+body {
+  font-family: "Segoe UI", "Aptos", Arial, sans-serif;
+  font-size: 13px;
+}
+
+button {
+  min-height: 28px;
+}
+
+.app-shell {
+  width: calc(100vw - 10px);
+  margin: 5px auto 8px;
+}
+
+.app-header {
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 3px;
+}
+
+.app-header h1 {
+  font-size: 1.08rem;
+  line-height: 1.15;
+}
+
+.app-header .eyebrow,
+.setup-header h2,
+.subhead {
+  display: none;
+}
+
+.header-status {
+  min-width: min(540px, 42vw);
+  min-height: 30px;
+  padding: 5px 9px;
+  border-radius: 3px;
+  font-size: 0.9rem;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: none;
+}
+
+.workspace {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.control-panel,
+.summary-strip,
+.table-panel,
+.inspector-panel {
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+.control-panel {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 6px 10px;
+  padding: 7px 10px;
+}
+
+.setup-header {
+  display: contents;
+}
+
+#compareButton {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 36px;
+}
+
+.file-grid {
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 0;
+}
+
+.file-field {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 3px;
+}
+
+.file-field span {
+  white-space: nowrap;
+}
+
+.file-field input {
+  min-height: 26px;
+  padding: 2px 4px;
+  font-size: 0.86rem;
+}
+
+.file-field input::file-selector-button {
+  padding: 2px 7px;
+  margin-right: 7px;
+  border-radius: 3px;
+  font-size: 0.86rem;
+}
+
+.advanced-panel {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  padding-top: 5px;
+}
+
+.advanced-panel summary {
+  font-size: 0.92rem;
+}
+
+.control-grid {
+  grid-template-columns: 160px minmax(260px, 1fr) 210px 130px auto auto;
+  gap: 6px;
+  margin-top: 6px;
+  align-items: end;
+}
+
+.field-wide {
+  grid-column: auto;
+}
+
+.field,
+.check-field,
+.search-field {
+  gap: 3px;
+}
+
+.field span,
+.search-field span,
+.status-label,
+.eyebrow {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+
+.field input,
+.field select,
+.search-field input,
+.search-field textarea {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 3px;
+}
+
+.check-field {
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 3px;
+}
+
+.primary-button,
+.ghost-button,
+.dark-button,
+.icon-button {
+  border-radius: 3px;
+}
+
+.primary-button,
+.ghost-button {
+  padding: 5px 9px;
+  font-size: 0.9rem;
+}
+
+.primary-button {
+  min-width: 0;
+}
+
+.status-row {
+  grid-column: 1 / -1;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.status-row .status-label {
+  margin-bottom: 1px;
+}
+
+.status-text {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.summary-strip {
+  min-height: 34px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.summary-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+}
+
+.summary-card:nth-child(n) {
+  border-top-width: 3px;
+}
+
+.summary-card strong {
+  margin: 0;
+  font-size: 1.16rem;
+}
+
+.workspace-grid {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 6px;
+}
+
+.table-panel {
+  padding: 7px;
+}
+
+.results-header {
+  align-items: center;
+}
+
+.results-header h2 {
+  font-size: 1rem;
+}
+
+.toolbar {
+  grid-template-columns: minmax(300px, 0.45fr) minmax(0, 1fr);
+  gap: 6px;
+  margin: 5px 0;
+  align-items: end;
+}
+
+.toolbar-actions,
+.filter-group {
+  gap: 5px;
+}
+
+.toolbar-actions .ghost-button,
+.filter-group label {
+  min-height: 28px;
+  padding: 4px 7px;
+  font-size: 0.84rem;
+}
+
+.search-field input {
+  min-height: 28px;
+}
+
+.table-wrap {
+  max-height: calc(100vh - 168px);
+  border-radius: 3px;
+  overflow: auto;
+}
+
+table {
+  min-width: 0;
+  table-layout: fixed;
+  font-size: 0.82rem;
+}
+
+thead th {
+  padding: 5px 7px;
+  font-size: 0.68rem;
+}
+
+tbody td {
+  padding: 5px 7px;
+  line-height: 1.25;
+}
+
+tbody tr {
+  min-height: 38px;
+}
+
+.param-name {
+  font-size: 0.88rem;
+}
+
+.param-subtitle {
+  margin-top: 2px;
+  font-size: 0.78rem;
+}
+
+.status-badge {
+  min-height: 22px;
+  padding: 3px 7px;
+  font-size: 0.74rem;
+}
+
+.row-ai-button {
+  width: 30px;
+  height: 24px;
+  min-height: 24px;
+  font-size: 0.68rem;
+}
+
+#resultsTable th:nth-child(1),
+#resultsTable td:nth-child(1) {
+  width: 48px;
+}
+
+#resultsTable th:nth-child(2),
+#resultsTable td:nth-child(2) {
+  width: 96px;
+}
+
+#resultsTable th:nth-child(3),
+#resultsTable td:nth-child(3) {
+  width: 220px;
+}
+
+#resultsTable th:nth-child(4),
+#resultsTable td:nth-child(4),
+#resultsTable th:nth-child(5),
+#resultsTable td:nth-child(5) {
+  width: 135px;
+}
+
+#resultsTable th:nth-child(6),
+#resultsTable td:nth-child(6) {
+  width: 260px;
+}
+
+#resultsTable th:nth-child(7),
+#resultsTable td:nth-child(7) {
+  width: 230px;
+}
+
+.inspector-panel {
+  top: 6px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 8px;
+}
+
+.inspector-header {
+  margin-bottom: 7px;
+}
+
+.inspector-title-row h2 {
+  max-width: 126px;
+  font-size: 0.95rem;
+}
+
+.inspector-actions {
+  gap: 4px;
+}
+
+.dark-button {
+  min-height: 28px;
+  padding: 4px 7px;
+  font-size: 0.86rem;
+}
+
+.inspector-focus-panel {
+  margin-bottom: 8px;
+  padding: 7px;
+  border-radius: 3px;
+}
+
+.focus-chip {
+  min-height: 24px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 0.78rem;
+}
+
+.detail-grid {
+  gap: 4px;
+  font-size: 0.86rem;
+}
+
+.detail-grid div {
+  padding-bottom: 5px;
+}
+
+.detail-grid dt {
+  margin-bottom: 2px;
+  font-size: 0.62rem;
+}
+
+.detail-grid dd {
+  line-height: 1.28;
+}
+
+.description-panel {
+  margin-top: 8px;
+  padding-top: 7px;
+}
+
+.description-copy {
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.ai-launcher {
+  right: 12px;
+  bottom: 12px;
+  width: 48px;
+  height: 42px;
+  border-radius: 5px;
+}
+
+@media (max-width: 1180px) {
+  .control-panel,
+  .file-grid,
+  .control-grid,
+  .workspace-grid,
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  #compareButton,
+  .file-grid {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .file-field {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Chat polish: make the assistant feel like a conversation, not a setup form. */
 .ai-assistant-drawer {
   width: min(640px, calc(100vw - 20px));
@@ -2724,5 +3161,387 @@ thead th {
     bottom: 10px;
     width: auto !important;
     max-height: 78vh;
+  }
+}
+
+/* Final compact overrides for controls defined late in the file. */
+.row-ai-button {
+  width: 30px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+}
+
+.row-ai-menu button {
+  min-height: 28px;
+  padding: 5px 7px;
+  font-size: 0.86rem;
+}
+
+.row-ai-popover-header,
+.row-ai-popover-body,
+.row-ai-popover-footer {
+  padding: 8px;
+}
+
+.ai-launcher {
+  right: 12px;
+  bottom: 12px;
+  width: 48px;
+  height: 40px;
+  border-radius: 5px;
+}
+
+/* Dense engineer-facing layout: table first, controls second, inspector quiet. */
+body {
+  background: #f3f5f7;
+}
+
+.app-shell {
+  width: calc(100vw - 6px);
+  margin: 3px auto 6px;
+}
+
+.app-header {
+  min-height: 34px;
+  padding: 5px 8px;
+  border-radius: 0;
+  border-color: #cdd7df;
+  background: #fff;
+}
+
+.app-header h1 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.header-status {
+  min-height: 26px;
+  min-width: min(520px, 36vw);
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: #f7f9fb;
+  font-size: 0.85rem;
+}
+
+.workspace {
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.control-panel,
+.summary-strip,
+.table-panel,
+.inspector-panel {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.control-panel {
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 2px 8px;
+  padding: 4px 8px;
+  border-left: 0;
+  border-right: 0;
+  background: #fff;
+}
+
+#compareButton {
+  min-height: 32px;
+  padding: 4px 10px;
+}
+
+.file-grid {
+  gap: 8px;
+}
+
+.file-field,
+.optional-field {
+  grid-template-columns: 86px minmax(0, 1fr);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.file-field input {
+  min-height: 28px;
+  padding: 1px 4px;
+  border: 1px solid #b9c8d4;
+  border-radius: 2px;
+}
+
+.file-field input::file-selector-button {
+  padding: 2px 8px;
+  border-radius: 2px;
+}
+
+.advanced-panel {
+  padding-top: 4px;
+  border-top-color: #cdd7df;
+}
+
+.advanced-panel summary {
+  color: #0f5c90;
+  font-size: 0.86rem;
+}
+
+.control-grid {
+  grid-template-columns: 150px minmax(260px, 1fr) 190px 116px auto auto;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.field input,
+.field select,
+.search-field input,
+.search-field textarea,
+.check-field {
+  min-height: 27px;
+  padding: 3px 7px;
+  border-radius: 2px;
+}
+
+.field span,
+.search-field span,
+.status-label,
+.eyebrow {
+  font-size: 0.63rem;
+}
+
+.status-row {
+  padding-top: 3px;
+}
+
+.status-text {
+  font-size: 0.82rem;
+}
+
+.summary-strip {
+  min-height: 28px;
+  border-left: 0;
+  border-right: 0;
+}
+
+.summary-card {
+  min-height: 28px;
+  padding: 3px 10px;
+}
+
+.summary-card span {
+  font-size: 0.65rem;
+}
+
+.summary-card strong {
+  font-size: 1.02rem;
+}
+
+.summary-card:nth-child(n) {
+  border-top-width: 2px;
+}
+
+.workspace-grid {
+  grid-template-columns: minmax(0, 1fr) 232px;
+  gap: 4px;
+}
+
+.table-panel {
+  padding: 4px;
+  border-left: 0;
+  background: #fff;
+}
+
+.results-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.results-header .eyebrow {
+  display: none;
+}
+
+.results-header h2 {
+  font-size: 0.96rem;
+}
+
+.toolbar-actions {
+  justify-content: end;
+}
+
+.toolbar-actions .ghost-button,
+.filter-group label {
+  min-height: 25px;
+  padding: 3px 7px;
+  font-size: 0.8rem;
+}
+
+.toolbar {
+  grid-template-columns: minmax(280px, 0.36fr) minmax(0, 1fr);
+  gap: 5px;
+  margin: 3px 0;
+}
+
+.search-field input {
+  min-height: 26px;
+}
+
+.table-wrap {
+  max-height: calc(100vh - 112px);
+  border-radius: 0;
+  border-color: #c7d3dc;
+}
+
+table {
+  font-size: 0.78rem;
+}
+
+thead th {
+  padding: 4px 6px;
+  background: #e9eef2;
+  font-size: 0.64rem;
+}
+
+tbody td {
+  padding: 4px 6px;
+}
+
+tbody tr {
+  min-height: 32px;
+}
+
+.param-name {
+  font-size: 0.82rem;
+}
+
+.param-subtitle {
+  font-size: 0.72rem;
+}
+
+.status-badge {
+  min-height: 19px;
+  padding: 2px 6px;
+  font-size: 0.68rem;
+}
+
+.row-ai-button {
+  width: 28px;
+  height: 22px;
+  min-height: 22px;
+}
+
+#resultsTable th:nth-child(1),
+#resultsTable td:nth-child(1) {
+  width: 40px;
+}
+
+#resultsTable th:nth-child(2),
+#resultsTable td:nth-child(2) {
+  width: 82px;
+}
+
+#resultsTable th:nth-child(3),
+#resultsTable td:nth-child(3) {
+  width: 210px;
+}
+
+.inspector-panel {
+  top: 3px;
+  max-height: calc(100vh - 8px);
+  padding: 7px;
+  border-color: #c7d3dc;
+  background: #f8fafc;
+  color: #17242f;
+}
+
+.inspector-panel .eyebrow,
+.description-panel .eyebrow,
+.detail-grid dt {
+  color: #536879;
+}
+
+.inspector-title-row {
+  align-items: start;
+}
+
+.inspector-title-row h2 {
+  max-width: 110px;
+  font-size: 0.88rem;
+}
+
+.inspector-actions {
+  gap: 3px;
+}
+
+.dark-button,
+.dark-button-primary {
+  min-height: 25px;
+  padding: 3px 6px;
+  border-color: #b9c8d4;
+  background: #fff;
+  color: #17242f;
+  font-size: 0.78rem;
+}
+
+.dark-button-primary {
+  border-color: #1477b8;
+  background: #1477b8;
+  color: #fff;
+}
+
+.inspector-focus-panel {
+  margin-bottom: 6px;
+  padding: 6px;
+  border-color: #d5e0e8;
+  background: #fff;
+}
+
+.inspector-focus-header .text-button {
+  color: #0f5c90;
+}
+
+.chip-list-dark .focus-chip,
+.focus-chip {
+  background: #eef3f7;
+  border-color: #c7d3dc;
+  color: #17242f;
+}
+
+.detail-grid {
+  gap: 3px;
+  font-size: 0.78rem;
+}
+
+.detail-grid div {
+  padding-bottom: 4px;
+  border-bottom-color: #d5e0e8;
+}
+
+.detail-grid dd {
+  line-height: 1.22;
+}
+
+.description-panel {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top-color: #d5e0e8;
+}
+
+.description-copy {
+  font-size: 0.78rem;
+  line-height: 1.28;
+}
+
+.ai-launcher {
+  width: 40px;
+  height: 34px;
+  right: 10px;
+  bottom: 10px;
+}
+
+@media (min-width: 1500px) {
+  .workspace-grid {
+    grid-template-columns: minmax(0, 1fr) 220px;
   }
 }
