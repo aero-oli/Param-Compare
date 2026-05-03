@@ -5,6 +5,7 @@ const path = require("path");
 const express = require("express");
 
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const PORT = Number(process.env.PORT || 8000);
 const SESSION_COOKIE = "param_compare_ai_session";
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
@@ -50,7 +51,7 @@ function cleanupExpiredSessions() {
   const now = Date.now();
   for (const [id, session] of sessions.entries()) {
     if (now - session.lastSeen > SESSION_MAX_AGE_MS) {
-      cleanupOpenAIContext(session).catch(() => {});
+      clearOpenAIContext(session);
       sessions.delete(id);
     }
   }
@@ -460,12 +461,6 @@ function buildFunctionTools() {
 
 function buildResponseTools(session, settings) {
   const tools = buildFunctionTools();
-  if (session.vectorStoreId) {
-    tools.push({
-      type: "file_search",
-      vector_store_ids: [session.vectorStoreId]
-    });
-  }
   if (settings.web_search_enabled) {
     tools.push({
       type: "web_search",
@@ -534,7 +529,6 @@ function extractToolCalls(response) {
 
 function extractCitations(response) {
   const web = [];
-  const files = [];
   for (const item of response.output || []) {
     if (item.type === "message") {
       for (const content of item.content || []) {
@@ -544,8 +538,6 @@ function extractCitations(response) {
               url: annotation.url,
               title: annotation.title || annotation.url
             });
-          } else if (annotation.type) {
-            files.push(annotation);
           }
         }
       }
@@ -555,15 +547,6 @@ function extractCitations(response) {
         if (source.url) {
           web.push({ url: source.url, title: source.title || source.url });
         }
-      });
-    }
-    if (item.type === "file_search_call" && item.results) {
-      item.results.forEach((result) => {
-        files.push({
-          file_id: result.file_id,
-          filename: result.filename,
-          score: result.score
-        });
       });
     }
   }
@@ -577,7 +560,16 @@ function extractCitations(response) {
       seen.add(key);
       return true;
     }).slice(0, 20),
-    files: files.slice(0, 20)
+    files: []
+  };
+}
+
+function extractWebSearchStatus(response, settings) {
+  const calls = (response.output || []).filter((item) => item.type === "web_search_call");
+  return {
+    enabled: Boolean(settings.web_search_enabled),
+    used: calls.length > 0,
+    callCount: calls.length
   };
 }
 
@@ -623,7 +615,7 @@ function responseBody(question, session, settings, current, previousResponseId, 
       verbosity: settings.verbosity
     },
     store: true,
-    include: ["web_search_call.action.sources", "file_search_call.results"]
+    include: ["web_search_call.action.sources"]
   };
 
   if (previousResponseId) {
@@ -676,9 +668,20 @@ async function createResponseWithFallback(apiKey, body) {
   throw lastError;
 }
 
-async function runAsk(session, question, rawSettings, current) {
+function previousResponseIdForAsk(session, isolated = false) {
+  return isolated ? null : session.previousResponseId || null;
+}
+
+function rememberAskResponseId(session, responseId, isolated = false) {
+  if (!isolated) {
+    session.previousResponseId = responseId;
+  }
+}
+
+async function runAsk(session, question, rawSettings, current, options = {}) {
   const settings = sanitizeSettings(rawSettings);
-  let previousResponseId = session.previousResponseId || null;
+  const isolated = options.isolated === true;
+  let previousResponseId = previousResponseIdForAsk(session, isolated);
   let response = await createResponseWithFallback(
     session.apiKey,
     responseBody(question, session, settings, current, previousResponseId, null)
@@ -711,92 +714,23 @@ async function runAsk(session, question, rawSettings, current) {
     );
   }
 
-  session.previousResponseId = response.id;
+  rememberAskResponseId(session, response.id, isolated);
   const text = extractOutputText(response);
   return {
     answer: parseAnswerPayload(text),
     citations: extractCitations(response),
+    webSearch: extractWebSearchStatus(response, settings),
     effectiveSettings: settings,
     responseId: response.id
   };
 }
 
-async function uploadContextFile(apiKey, filename, content) {
-  const form = new FormData();
-  form.set("purpose", "assistants");
-  form.set("file", new Blob([content], { type: "text/markdown" }), filename);
-  return openaiRequest(apiKey, "/files", {
-    method: "POST",
-    body: form
-  });
-}
-
-async function createVectorStore(apiKey) {
-  return openaiRequest(apiKey, "/vector_stores", {
-    method: "POST",
-    body: {
-      name: `param-compare-${new Date().toISOString()}`,
-      expires_after: {
-        anchor: "last_active_at",
-        days: 1
-      }
-    }
-  });
-}
-
-async function attachFile(apiKey, vectorStoreId, fileId) {
-  return openaiRequest(apiKey, `/vector_stores/${encodeURIComponent(vectorStoreId)}/files`, {
-    method: "POST",
-    body: { file_id: fileId }
-  });
-}
-
-async function listVectorStoreFiles(apiKey, vectorStoreId) {
-  return openaiRequest(apiKey, `/vector_stores/${encodeURIComponent(vectorStoreId)}/files?limit=100`);
-}
-
-async function waitForVectorStore(apiKey, vectorStoreId) {
-  const started = Date.now();
-  while (Date.now() - started < 25000) {
-    const files = await listVectorStoreFiles(apiKey, vectorStoreId);
-    const data = files.data || [];
-    if (data.length && data.every((file) => file.status === "completed")) {
-      return { ready: true, files: data };
-    }
-    if (data.some((file) => file.status === "failed" || file.status === "cancelled")) {
-      return { ready: false, files: data };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 900));
-  }
-  return { ready: false, files: [] };
-}
-
-async function deleteOpenAIResource(apiKey, pathName) {
-  try {
-    await openaiRequest(apiKey, pathName, { method: "DELETE" });
-  } catch (_error) {
-    // Best-effort cleanup.
-  }
-}
-
-async function cleanupOpenAIContext(session) {
-  if (!session.apiKey) {
-    return;
-  }
-  if (session.vectorStoreId) {
-    await deleteOpenAIResource(session.apiKey, `/vector_stores/${encodeURIComponent(session.vectorStoreId)}`);
-  }
-  for (const fileId of session.fileIds || []) {
-    await deleteOpenAIResource(session.apiKey, `/files/${encodeURIComponent(fileId)}`);
-  }
-  session.vectorStoreId = "";
-  session.fileIds = [];
+function clearOpenAIContext(session) {
   session.context = null;
   session.previousResponseId = null;
 }
 
-async function configureContext(session, context) {
-  await cleanupOpenAIContext(session);
+function configureContext(session, context) {
   const cleanContext = {
     ...context,
     rows: safeArray(context.rows, MAX_CONTEXT_ROWS),
@@ -804,25 +738,12 @@ async function configureContext(session, context) {
     focusedParamNames: safeArray(context.focusedParamNames, 250).map(normalizeName).filter(Boolean),
     selectedParamName: normalizeName(context.selectedParamName)
   };
-  const docs = buildContextDocuments(cleanContext);
-  const vectorStore = await createVectorStore(session.apiKey);
-  session.context = null;
-  session.vectorStoreId = vectorStore.id;
-  session.fileIds = [];
-  session.previousResponseId = null;
-
-  for (const doc of docs) {
-    const file = await uploadContextFile(session.apiKey, doc.filename, doc.content);
-    session.fileIds.push(file.id);
-    await attachFile(session.apiKey, vectorStore.id, file.id);
-  }
-
-  const readiness = await waitForVectorStore(session.apiKey, vectorStore.id);
   session.context = cleanContext;
+  session.previousResponseId = null;
   return {
-    vectorStoreId: vectorStore.id,
-    fileCount: session.fileIds.length,
-    ready: readiness.ready
+    contextReady: true,
+    rowCount: cleanContext.rows.length,
+    metadataEntryCount: cleanContext.metadataEntries.length
   };
 }
 
@@ -835,33 +756,69 @@ async function validateApiKey(apiKey) {
   return modelIds;
 }
 
-function createApp() {
+function createApp(options = {}) {
+  const validateApiKeyImpl = options.validateApiKey || validateApiKey;
+  const serverApiKey = options.openAiApiKey !== undefined ? options.openAiApiKey : OPENAI_API_KEY;
+  const desktopKeyStore = options.desktopKeyStore || null;
   const app = express();
   app.use(express.json({ limit: "25mb" }));
 
-  app.post("/api/openai/session", async (req, res) => {
-    const apiKey = normalizeName(req.body?.apiKey);
-    if (!apiKey) {
-      res.status(400).json({ error: "Enter an OpenAI API key." });
+  app.get("/api/openai/status", (_req, res) => {
+    res.json({
+      serverKeyAvailable: Boolean(serverApiKey),
+      desktopKeyStorageAvailable: Boolean(desktopKeyStore?.isAvailable()),
+      desktopStoredKeyAvailable: Boolean(desktopKeyStore?.hasKey())
+    });
+  });
+
+  app.post("/api/desktop/openai-key/clear", (_req, res) => {
+    if (!desktopKeyStore) {
+      res.status(404).json({ error: "Desktop key storage is not available." });
       return;
     }
     try {
-      const models = await validateApiKey(apiKey);
+      desktopKeyStore.clearKey();
+      res.json({ ok: true, desktopStoredKeyAvailable: false });
+    } catch (error) {
+      res.status(500).json({ error: error.message || "Could not clear the saved API key." });
+    }
+  });
+
+  app.post("/api/openai/session", async (req, res) => {
+    const providedApiKey = normalizeName(req.body?.apiKey);
+    const wantsDesktopStoredKey = req.body?.useDesktopStoredKey === true;
+    const wantsServerKey = req.body?.useServerKey === true || (!providedApiKey && !wantsDesktopStoredKey);
+    const apiKey = wantsDesktopStoredKey
+      ? normalizeName(desktopKeyStore?.getKey())
+      : wantsServerKey
+        ? normalizeName(serverApiKey)
+        : providedApiKey;
+    const source = wantsDesktopStoredKey ? "desktop" : wantsServerKey ? "environment" : "manual";
+    if (!apiKey) {
+      res.status(400).json({ error: "Enter an OpenAI API key, use a saved desktop key, or configure OPENAI_API_KEY on the server." });
+      return;
+    }
+    try {
+      const models = await validateApiKeyImpl(apiKey);
+      if (!wantsDesktopStoredKey && req.body?.rememberApiKey === true && desktopKeyStore) {
+        desktopKeyStore.setKey(apiKey);
+      }
       const id = createSessionId();
       sessions.set(id, {
         id,
         apiKey,
+        source,
         createdAt: Date.now(),
         lastSeen: Date.now(),
         context: null,
-        vectorStoreId: "",
-        fileIds: [],
         previousResponseId: null
       });
       res.setHeader("Set-Cookie", sessionCookie(id));
       res.json({
         ok: true,
+        source,
         models,
+        desktopStoredKeyAvailable: Boolean(desktopKeyStore?.hasKey()),
         recommendedModel: models.includes(DEFAULT_MODEL) ? DEFAULT_MODEL : models.find((model) => model.startsWith("gpt-5")) || DEFAULT_MODEL
       });
     } catch (error) {
@@ -871,7 +828,7 @@ function createApp() {
 
   app.post("/api/ai/context", requireSession, async (req, res) => {
     try {
-      const result = await configureContext(req.aiSession, req.body || {});
+      const result = configureContext(req.aiSession, req.body || {});
       res.json({ ok: true, ...result });
     } catch (error) {
       res.status(error.status || 500).json({ error: error.message || "Could not configure AI context." });
@@ -892,6 +849,8 @@ function createApp() {
       const result = await runAsk(req.aiSession, question, req.body?.settings || {}, {
         selectedParamName: req.body?.selectedParamName || "",
         focusedParamNames: safeArray(req.body?.focusedParamNames, 250)
+      }, {
+        isolated: req.body?.isolated === true
       });
       res.json({ ok: true, ...result });
     } catch (error) {
@@ -900,7 +859,7 @@ function createApp() {
   });
 
   app.post("/api/ai/cleanup", requireSession, async (req, res) => {
-    await cleanupOpenAIContext(req.aiSession);
+    clearOpenAIContext(req.aiSession);
     res.setHeader("Set-Cookie", clearSessionCookie());
     sessions.delete(req.aiSession.id);
     res.json({ ok: true });
@@ -913,6 +872,9 @@ function createApp() {
     app.get(assetPath, (_req, res) => {
       res.sendFile(path.join(__dirname, assetPath.slice(1)));
     });
+  });
+  app.get("/vendor/marked.umd.js", (_req, res) => {
+    res.sendFile(path.join(__dirname, "node_modules", "marked", "lib", "marked.umd.js"));
   });
   return app;
 }
@@ -928,6 +890,9 @@ module.exports = {
   buildFocusBundle,
   createApp,
   executeTool,
+  extractWebSearchStatus,
+  previousResponseIdForAsk,
+  rememberAskResponseId,
   paramPayload,
   prefixForParam,
   sanitizeSettings,

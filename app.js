@@ -25,6 +25,28 @@ const DEFAULT_AI_SETTINGS = {
   external_web_access: true,
   temperature: null
 };
+const ROW_AI_ACTIONS = [
+  {
+    id: "explain",
+    label: "Explain parameter",
+    prompt: "Explain what this parameter controls in practical terms. Include units, range, decoded values, reboot notes, and what the current comparison value means."
+  },
+  {
+    id: "impact",
+    label: "Change impact",
+    prompt: "Explain the operational impact of this parameter change. Be concrete about old versus new value, added/removed status, and what could change in vehicle behavior."
+  },
+  {
+    id: "risk",
+    label: "Check risk",
+    prompt: "Assess uncertainty and risk for this parameter change. List likely side effects, what to verify before flight, and whether official docs or controlled validation are needed."
+  },
+  {
+    id: "related",
+    label: "Related params",
+    prompt: "Find related parameters in the loaded comparison and metadata. Explain why they may interact with this parameter and which ones are worth checking next."
+  }
+];
 
 const state = {
   allRows: [],
@@ -44,9 +66,25 @@ const state = {
     contextDirty: true,
     isBusy: false,
     panelOpen: false,
-    activeTab: "chat",
+    setupOpen: false,
+    settingsOpen: false,
+    serverKeyAvailable: false,
+    desktopKeyStorageAvailable: false,
+    desktopStoredKeyAvailable: false,
     settings: { ...DEFAULT_AI_SETTINGS },
     messages: []
+  },
+  rowAi: {
+    activeMenuRowId: "",
+    menuAnchor: null,
+    popoverRowId: "",
+    popoverAnchor: null,
+    action: "",
+    isLoading: false,
+    answer: null,
+    error: "",
+    webSearch: null,
+    citations: null
   }
 };
 
@@ -96,17 +134,21 @@ const elements = {
   aiDrawerBackdrop: document.getElementById("aiDrawerBackdrop"),
   aiAssistantDrawer: document.getElementById("aiAssistantDrawer"),
   closeAiDrawerButton: document.getElementById("closeAiDrawerButton"),
-  aiTabButtons: Array.from(document.querySelectorAll("[data-ai-tab]")),
-  aiTabPanels: {
-    chat: document.getElementById("aiTabChat"),
-    setup: document.getElementById("aiTabSetup"),
-    settings: document.getElementById("aiTabSettings")
-  },
-  aiChatSetupNotice: document.getElementById("aiChatSetupNotice"),
-  aiChatConnectButton: document.getElementById("aiChatConnectButton"),
+  aiSettingsButton: document.getElementById("aiSettingsButton"),
+  aiSettingsPanel: document.getElementById("aiSettingsPanel"),
+  closeAiSettingsButton: document.getElementById("closeAiSettingsButton"),
+  aiSetupBackdrop: document.getElementById("aiSetupBackdrop"),
+  aiSetupSheet: document.getElementById("aiSetupSheet"),
+  closeAiSetupButton: document.getElementById("closeAiSetupButton"),
+  aiSetupIntro: document.getElementById("aiSetupIntro"),
+  useServerAiKeyButton: document.getElementById("useServerAiKeyButton"),
+  useStoredAiKeyButton: document.getElementById("useStoredAiKeyButton"),
+  manualAiKeyFields: document.getElementById("manualAiKeyFields"),
   openAiKeyInput: document.getElementById("openAiKeyInput"),
+  rememberOpenAiKeyInput: document.getElementById("rememberOpenAiKeyInput"),
+  clearStoredAiKeyButton: document.getElementById("clearStoredAiKeyButton"),
+  storedAiKeyStatus: document.getElementById("storedAiKeyStatus"),
   connectAiButton: document.getElementById("connectAiButton"),
-  prepareAiContextButton: document.getElementById("prepareAiContextButton"),
   cleanupAiButton: document.getElementById("cleanupAiButton"),
   aiSessionStatus: document.getElementById("aiSessionStatus"),
   aiContextStatus: document.getElementById("aiContextStatus"),
@@ -125,7 +167,8 @@ const elements = {
   aiChatLog: document.getElementById("aiChatLog"),
   aiQuestionInput: document.getElementById("aiQuestionInput"),
   askAiButton: document.getElementById("askAiButton"),
-  tooltip: document.getElementById("tooltip")
+  tooltip: document.getElementById("tooltip"),
+  rowAiLayer: document.getElementById("rowAiLayer")
 };
 
 function setStatus(text) {
@@ -150,40 +193,79 @@ function syncAiShellState() {
   elements.aiAssistantDrawer.inert = !state.ai.panelOpen;
   elements.aiLauncherButton.setAttribute("aria-expanded", state.ai.panelOpen ? "true" : "false");
   elements.aiDrawerBackdrop.hidden = !state.ai.panelOpen;
-  elements.aiChatSetupNotice.hidden = state.ai.sessionReady;
+  elements.aiSetupSheet.hidden = !state.ai.setupOpen;
+  elements.aiSetupBackdrop.hidden = !state.ai.setupOpen;
+  elements.aiSettingsPanel.hidden = !state.ai.settingsOpen;
+  elements.aiSettingsButton.setAttribute("aria-expanded", state.ai.settingsOpen ? "true" : "false");
+  elements.useServerAiKeyButton.hidden = !state.ai.serverKeyAvailable;
+  elements.useStoredAiKeyButton.hidden = !state.ai.desktopStoredKeyAvailable;
+  elements.rememberOpenAiKeyInput.disabled = !state.ai.desktopKeyStorageAvailable;
+  elements.clearStoredAiKeyButton.hidden = !state.ai.desktopStoredKeyAvailable;
+  elements.storedAiKeyStatus.hidden = !state.ai.desktopKeyStorageAvailable;
+  elements.storedAiKeyStatus.textContent = state.ai.desktopStoredKeyAvailable
+    ? "A saved desktop key is available."
+    : state.ai.desktopKeyStorageAvailable
+      ? "No desktop key is saved."
+      : "Desktop key storage is available only in the packaged app.";
+  elements.aiSetupIntro.textContent = state.ai.desktopKeyStorageAvailable
+    ? "Use a saved desktop key, save a new key on this device, or connect with a temporary key for this session."
+    : state.ai.serverKeyAvailable
+      ? "Use the OpenAI key configured on this local server, or enter a temporary key for this browser session."
+      : "Use a temporary OpenAI API key for this local browser session. The key is sent to the local server and kept in memory only.";
 }
 
-function setAiTab(tab) {
-  const nextTab = elements.aiTabPanels[tab] ? tab : "chat";
-  state.ai.activeTab = nextTab;
-  elements.aiTabButtons.forEach((button) => {
-    const isActive = button.dataset.aiTab === nextTab;
-    button.classList.toggle("is-active", isActive);
-    button.setAttribute("aria-selected", isActive ? "true" : "false");
-  });
-  Object.entries(elements.aiTabPanels).forEach(([key, panel]) => {
-    panel.classList.toggle("is-active", key === nextTab);
-    panel.hidden = key !== nextTab;
-  });
-}
-
-function openAiPanel(tab = "chat") {
+function openAiPanel() {
+  if (!state.ai.sessionReady) {
+    openAiSetup();
+    return;
+  }
   state.ai.panelOpen = true;
-  setAiTab(tab);
+  state.ai.setupOpen = false;
   syncAiShellState();
 }
 
 function closeAiPanel() {
   state.ai.panelOpen = false;
+  state.ai.settingsOpen = false;
+  syncAiShellState();
+}
+
+function openAiSetup() {
+  state.ai.setupOpen = true;
+  state.ai.panelOpen = false;
+  state.ai.settingsOpen = false;
+  syncAiShellState();
+  if (!state.ai.serverKeyAvailable) {
+    elements.openAiKeyInput.focus();
+  }
+}
+
+function closeAiSetup() {
+  state.ai.setupOpen = false;
+  syncAiShellState();
+}
+
+function toggleAiSettings() {
+  if (!state.ai.sessionReady) {
+    openAiSetup();
+    return;
+  }
+  state.ai.settingsOpen = !state.ai.settingsOpen;
+  syncAiShellState();
+}
+
+function closeAiSettings() {
+  state.ai.settingsOpen = false;
   syncAiShellState();
 }
 
 function setAiBusy(isBusy) {
   state.ai.isBusy = isBusy;
   elements.connectAiButton.disabled = isBusy;
-  elements.prepareAiContextButton.disabled = isBusy || !state.ai.sessionReady || !state.allRows.length;
+  elements.useServerAiKeyButton.disabled = isBusy;
+  elements.useStoredAiKeyButton.disabled = isBusy;
+  elements.clearStoredAiKeyButton.disabled = isBusy;
   elements.askAiButton.disabled = isBusy || !state.ai.sessionReady || !state.allRows.length;
-  elements.aiChatConnectButton.disabled = isBusy;
   elements.cleanupAiButton.disabled = isBusy || !state.ai.sessionReady;
   syncAiShellState();
 }
@@ -194,6 +276,18 @@ async function postJson(url, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload || {})
   });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || `Request failed with HTTP ${response.status}`);
+    error.status = response.status;
+    error.code = data.code || "";
+    throw error;
+  }
+  return data;
+}
+
+async function getJson(url) {
+  const response = await fetch(url, { cache: "no-store" });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || `Request failed with HTTP ${response.status}`);
@@ -733,11 +827,11 @@ function statusBadge(row) {
   return `<span class="status-badge status-badge-${escapeHtml(row.status)}">${escapeHtml(STATUS_LABELS[row.status] || row.status)}</span>`;
 }
 
-function focusToggleMarkup(row) {
-  const isFocused = state.focusedParamNames.has(row.name);
+function rowAiButtonMarkup(row) {
+  const isActive = state.rowAi.activeMenuRowId === row.id || state.rowAi.popoverRowId === row.id;
   return `
-    <button class="focus-toggle${isFocused ? " is-focused" : ""}" type="button" data-focus-param="${escapeHtml(row.name)}" aria-label="${isFocused ? "Remove AI focus" : "Add AI focus"} ${escapeHtml(row.name)}" title="${isFocused ? "Remove AI focus" : "Add AI focus"}">
-      ${isFocused ? "✓" : "+"}
+    <button class="row-ai-button${isActive ? " is-active" : ""}" type="button" data-row-ai-menu="${escapeHtml(row.id)}" aria-label="Ask AI about ${escapeHtml(row.name)}" title="Ask AI about ${escapeHtml(row.name)}">
+      AI
     </button>
   `;
 }
@@ -818,7 +912,7 @@ function renderTable() {
     tr.dataset.rowId = row.id;
     tr.tabIndex = 0;
     tr.innerHTML = `
-      <td>${focusToggleMarkup(row)}</td>
+      <td>${rowAiButtonMarkup(row)}</td>
       <td>${statusBadge(row)}</td>
       <td>
         <div class="param-name">${escapeHtml(row.name)}</div>
@@ -931,7 +1025,7 @@ function markAiContextDirty(reason) {
   state.ai.contextDirty = true;
   state.ai.contextReady = false;
   if (state.ai.sessionReady) {
-    setAiContextStatus(reason || "AI context needs to be prepared.");
+    setAiContextStatus(reason || "Comparison context will refresh before the next answer.");
   }
 }
 
@@ -946,7 +1040,7 @@ function setFocusedParam(name, isFocused) {
   }
   highlightSelectedRow();
   renderFocusChips();
-  markAiContextDirty("Focus changed. Prepare context before the next AI answer.");
+  markAiContextDirty("Ask about selection changed. Context will refresh before the next answer.");
 }
 
 function toggleFocusedParam(name) {
@@ -967,10 +1061,10 @@ function renderFocusChips() {
     containers.forEach((container) => {
       const fallback = document.createElement("span");
       fallback.className = "focus-chip";
-      fallback.textContent = selected ? `Using selected: ${selected.name}` : "No focused params";
+      fallback.textContent = selected ? `Selected: ${selected.name}` : "No parameter selected";
       container.appendChild(fallback);
     });
-    elements.toggleFocusSelectedButton.textContent = "Focus";
+    elements.toggleFocusSelectedButton.textContent = "Ask about";
     elements.toggleFocusSelectedButton.disabled = !selected;
     return;
   }
@@ -984,7 +1078,7 @@ function renderFocusChips() {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = "x";
-      button.setAttribute("aria-label", `Remove ${name} from AI focus`);
+      button.setAttribute("aria-label", `Remove ${name} from Ask about`);
       button.addEventListener("click", () => {
         setFocusedParam(name, false);
         renderTable();
@@ -997,8 +1091,8 @@ function renderFocusChips() {
   const selected = currentSelectedRow();
   elements.toggleFocusSelectedButton.disabled = !selected;
   elements.toggleFocusSelectedButton.textContent = selected && state.focusedParamNames.has(selected.name)
-    ? "Unfocus"
-    : "Focus";
+    ? "Remove"
+    : "Ask about";
 }
 
 function serializeMetadataEntries() {
@@ -1088,12 +1182,12 @@ async function compareFiles() {
     state.allRows = sortRows(rows, elements.sortByInput.value);
     state.selectedRowId = state.allRows[0]?.id || "";
     state.focusedParamNames = new Set(Array.from(state.focusedParamNames).filter((name) => rows.some((row) => row.name === name)));
-    markAiContextDirty("Comparison changed. Prepare AI context.");
+    markAiContextDirty("Comparison changed. Context will refresh before the next answer.");
     applyFilters();
     setStatus(`Comparison complete. Showing ${state.filteredRows.length} of ${state.allRows.length} relevant rows.`);
     if (state.ai.sessionReady) {
       syncAiContext().catch((error) => {
-        setAiContextStatus(`Context preparation failed: ${error.message}`);
+        setAiContextStatus(`Context refresh failed: ${error.message}`);
       });
     }
   } catch (error) {
@@ -1114,35 +1208,86 @@ function populateModelOptions(models) {
   });
 }
 
-async function connectAiSession() {
-  openAiPanel("setup");
-  const apiKey = elements.openAiKeyInput.value.trim();
-  if (!apiKey) {
+async function refreshAiAvailability() {
+  try {
+    const result = await getJson("/api/openai/status");
+    state.ai.serverKeyAvailable = Boolean(result.serverKeyAvailable);
+    state.ai.desktopKeyStorageAvailable = Boolean(result.desktopKeyStorageAvailable);
+    state.ai.desktopStoredKeyAvailable = Boolean(result.desktopStoredKeyAvailable);
+    syncAiShellState();
+  } catch (_error) {
+    state.ai.serverKeyAvailable = false;
+    state.ai.desktopKeyStorageAvailable = false;
+    state.ai.desktopStoredKeyAvailable = false;
+    syncAiShellState();
+  }
+}
+
+async function connectAiSession(options = {}) {
+  const useServerKey = Boolean(options.useServerKey);
+  const useDesktopStoredKey = Boolean(options.useDesktopStoredKey);
+  const apiKey = useServerKey || useDesktopStoredKey ? "" : elements.openAiKeyInput.value.trim();
+  if (!useServerKey && !useDesktopStoredKey && !apiKey) {
     setAiSessionStatus("Enter an OpenAI API key first.");
+    openAiSetup();
     return;
   }
 
   setAiBusy(true);
-  setAiSessionStatus("Validating API key...");
+  setAiSessionStatus(useServerKey
+    ? "Connecting with local OpenAI key..."
+    : useDesktopStoredKey
+      ? "Connecting with saved desktop key..."
+      : "Validating API key...");
   try {
-    const result = await postJson("/api/openai/session", { apiKey });
+    const payload = useServerKey
+      ? { useServerKey: true }
+      : useDesktopStoredKey
+        ? { useDesktopStoredKey: true }
+        : { apiKey, rememberApiKey: elements.rememberOpenAiKeyInput.checked };
+    const result = await postJson("/api/openai/session", payload);
     state.ai.sessionReady = true;
     state.ai.contextReady = false;
     state.ai.contextDirty = true;
+    state.ai.desktopStoredKeyAvailable = Boolean(result.desktopStoredKeyAvailable);
     elements.openAiKeyInput.value = "";
+    elements.rememberOpenAiKeyInput.checked = false;
     populateModelOptions(result.models || []);
     if (result.recommendedModel && !elements.aiModelInput.value.trim()) {
       elements.aiModelInput.value = result.recommendedModel;
     }
-    setAiSessionStatus("AI connected. API key is held in backend memory only.");
-    setAiContextStatus(state.allRows.length ? "Preparing AI context..." : "Run a comparison before preparing context.");
+    setAiSessionStatus(result.source === "environment"
+      ? "AI connected with local server key."
+      : result.source === "desktop"
+        ? "AI connected with saved desktop key."
+        : result.desktopStoredKeyAvailable
+          ? "AI connected. API key saved on this device."
+          : "AI connected. API key is held in backend memory only.");
+    setAiContextStatus(state.allRows.length ? "Preparing comparison context..." : "Run a comparison before asking.");
     if (state.allRows.length) {
       await syncAiContext();
     }
-    setAiTab("chat");
+    closeAiSetup();
+    state.ai.panelOpen = true;
+    syncAiShellState();
   } catch (error) {
     state.ai.sessionReady = false;
     setAiSessionStatus(`AI connection failed: ${error.message}`);
+    openAiSetup();
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+async function clearStoredAiKey() {
+  setAiBusy(true);
+  try {
+    await postJson("/api/desktop/openai-key/clear", {});
+    state.ai.desktopStoredKeyAvailable = false;
+    setAiSessionStatus("Saved desktop key forgotten.");
+    syncAiShellState();
+  } catch (error) {
+    setAiSessionStatus(`Could not forget saved key: ${error.message}`);
   } finally {
     setAiBusy(false);
   }
@@ -1150,30 +1295,255 @@ async function connectAiSession() {
 
 async function syncAiContext() {
   if (!state.ai.sessionReady) {
-    setAiContextStatus("Connect AI before preparing context.");
+    setAiContextStatus("Connect AI before asking.");
     return;
   }
   if (!state.allRows.length) {
-    setAiContextStatus("Run a comparison before preparing context.");
+    setAiContextStatus("Run a comparison before asking.");
     return;
   }
 
   setAiBusy(true);
-  setAiContextStatus("Creating vector store and uploading comparison context...");
+  setAiContextStatus("Preparing comparison context...");
   try {
     const result = await postJson("/api/ai/context", aiContextPayload());
     state.ai.contextReady = true;
     state.ai.contextDirty = false;
-    setAiContextStatus(
-      `Context ready: ${result.fileCount} knowledge files in vector store${result.ready ? "" : " (still processing; first answer may wait)"}`
-    );
+    setAiContextStatus(`Context ready: ${result.rowCount || state.allRows.length} rows loaded`);
   } catch (error) {
     state.ai.contextReady = false;
     state.ai.contextDirty = true;
-    setAiContextStatus(`Context preparation failed: ${error.message}`);
+    setAiContextStatus(`Context refresh failed: ${error.message}`);
     throw error;
   } finally {
     setAiBusy(false);
+  }
+}
+
+function rowAiActionById(actionId) {
+  return ROW_AI_ACTIONS.find((action) => action.id === actionId) || ROW_AI_ACTIONS[0];
+}
+
+function rowAiPrompt(row, actionId) {
+  const action = rowAiActionById(actionId);
+  return [
+    action.prompt,
+    "",
+    `Parameter: ${row.name}`,
+    `Status: ${STATUS_LABELS[row.status] || row.status}`,
+    `Old value: ${row.oldValue || "not present"}`,
+    `New value: ${row.newValue || "not present"}`,
+    `Old decoded: ${row.oldDecoded || "none"}`,
+    `New decoded: ${row.newDecoded || "none"}`,
+    `Display name: ${row.displayName || "not available"}`,
+    `Units: ${row.units || "not listed"}`,
+    `Range: ${row.allowedRange || "not listed"}`,
+    `Notes: ${row.notes || "none"}`,
+    `Description: ${row.description || "No description available."}`,
+    "",
+    "Keep this as a concise single-shot answer for a row popover. Use Markdown."
+  ].join("\n");
+}
+
+function placeOverlay(element, anchor, options = {}) {
+  const margin = 10;
+  const preferredWidth = options.width || 360;
+  element.style.width = `${Math.min(preferredWidth, window.innerWidth - margin * 2)}px`;
+  element.style.left = "0px";
+  element.style.top = "0px";
+  element.hidden = false;
+  const rect = element.getBoundingClientRect();
+  const left = Math.max(margin, Math.min(anchor.left, window.innerWidth - rect.width - margin));
+  const below = anchor.bottom + 8;
+  const above = anchor.top - rect.height - 8;
+  const top = below + rect.height <= window.innerHeight - margin ? below : Math.max(margin, above);
+  element.style.left = `${left}px`;
+  element.style.top = `${top}px`;
+}
+
+function webSearchStatusText(webSearch) {
+  if (!webSearch) {
+    return "";
+  }
+  if (!webSearch.enabled) {
+    return "Web search off";
+  }
+  if (webSearch.used) {
+    return `Web search used${webSearch.callCount > 1 ? ` (${webSearch.callCount} searches)` : ""}`;
+  }
+  return "No web search";
+}
+
+function closeRowAi() {
+  state.rowAi.activeMenuRowId = "";
+  state.rowAi.menuAnchor = null;
+  state.rowAi.popoverRowId = "";
+  state.rowAi.popoverAnchor = null;
+  state.rowAi.action = "";
+  state.rowAi.isLoading = false;
+  state.rowAi.answer = null;
+  state.rowAi.error = "";
+  state.rowAi.webSearch = null;
+  state.rowAi.citations = null;
+  renderRowAiOverlay();
+  renderTable();
+}
+
+function renderRowAiOverlay() {
+  elements.rowAiLayer.innerHTML = "";
+  const hasOverlay = Boolean(state.rowAi.activeMenuRowId || state.rowAi.popoverRowId);
+  elements.rowAiLayer.hidden = !hasOverlay;
+  if (!hasOverlay) {
+    return;
+  }
+
+  if (state.rowAi.activeMenuRowId && state.rowAi.menuAnchor) {
+    const row = rowById(state.rowAi.activeMenuRowId);
+    if (row) {
+      const menu = document.createElement("div");
+      menu.className = "row-ai-menu";
+      menu.setAttribute("role", "menu");
+      menu.innerHTML = `
+        <div class="row-ai-menu-title">${escapeHtml(row.name)}</div>
+        ${ROW_AI_ACTIONS.map((action) => `<button type="button" role="menuitem" data-row-ai-action="${action.id}">${escapeHtml(action.label)}</button>`).join("")}
+        <button type="button" role="menuitem" data-row-ai-open-chat="true">Open in chat</button>
+      `;
+      elements.rowAiLayer.appendChild(menu);
+      placeOverlay(menu, state.rowAi.menuAnchor, { width: 240 });
+    }
+  }
+
+  if (state.rowAi.popoverRowId && state.rowAi.popoverAnchor) {
+    const row = rowById(state.rowAi.popoverRowId);
+    if (row) {
+      const popover = document.createElement("section");
+      popover.className = "row-ai-popover";
+      popover.setAttribute("role", "dialog");
+      popover.setAttribute("aria-label", `AI response for ${row.name}`);
+      const action = rowAiActionById(state.rowAi.action);
+      const body = document.createElement("div");
+      body.className = "row-ai-popover-body";
+      if (state.rowAi.isLoading) {
+        body.innerHTML = "<div class=\"row-ai-loading\">Asking AI...</div>";
+      } else if (state.rowAi.error) {
+        body.textContent = state.rowAi.error;
+      } else if (state.rowAi.answer) {
+        body.appendChild(renderMarkdown(state.rowAi.answer.answer_markdown || "No answer returned."));
+      }
+      popover.innerHTML = `
+        <div class="row-ai-popover-header">
+          <div>
+            <p class="eyebrow">${escapeHtml(action.label)}</p>
+            <h3>${escapeHtml(row.name)}</h3>
+          </div>
+          <button class="icon-button" type="button" data-row-ai-close="true" aria-label="Close row AI response">×</button>
+        </div>
+      `;
+      popover.appendChild(body);
+      const footer = document.createElement("div");
+      footer.className = "row-ai-popover-footer";
+      const statusText = webSearchStatusText(state.rowAi.webSearch);
+      if (statusText) {
+        const chip = document.createElement("span");
+        chip.className = "source-chip";
+        chip.textContent = statusText;
+        footer.appendChild(chip);
+      }
+      if (state.rowAi.citations?.web?.length) {
+        const citations = document.createElement("div");
+        citations.className = "ai-citation-list";
+        state.rowAi.citations.web.forEach((citation) => {
+          const item = document.createElement("div");
+          item.append("Web: ", linkElement(citation.url, citation.title));
+          citations.appendChild(item);
+        });
+        footer.appendChild(citations);
+      }
+      if (footer.children.length) {
+        popover.appendChild(footer);
+      }
+      elements.rowAiLayer.appendChild(popover);
+      placeOverlay(popover, state.rowAi.popoverAnchor, { width: 440 });
+    }
+  }
+}
+
+function toggleRowAiMenu(rowId, anchorElement) {
+  const rect = anchorElement.getBoundingClientRect();
+  const nextRowId = state.rowAi.activeMenuRowId === rowId ? "" : rowId;
+  state.rowAi.activeMenuRowId = nextRowId;
+  state.rowAi.menuAnchor = nextRowId ? rect : null;
+  state.rowAi.popoverRowId = "";
+  state.rowAi.popoverAnchor = null;
+  renderTable();
+  renderRowAiOverlay();
+}
+
+function openRowInChat(rowId) {
+  const row = rowById(rowId);
+  if (!row) {
+    return;
+  }
+  state.focusedParamNames.clear();
+  state.focusedParamNames.add(row.name);
+  selectRow(row.id);
+  markAiContextDirty("Ask about selection changed. Context will refresh before the next answer.");
+  state.rowAi.activeMenuRowId = "";
+  renderTable();
+  renderRowAiOverlay();
+  openAiPanel();
+}
+
+async function askRowAi(rowId, actionId, anchor) {
+  const row = rowById(rowId);
+  if (!row) {
+    return;
+  }
+  if (!state.ai.sessionReady) {
+    setAiSessionStatus("Connect AI before asking a question.");
+    state.rowAi.activeMenuRowId = "";
+    state.rowAi.menuAnchor = null;
+    renderRowAiOverlay();
+    renderTable();
+    openAiSetup();
+    return;
+  }
+  state.rowAi.activeMenuRowId = "";
+  state.rowAi.popoverRowId = rowId;
+  state.rowAi.popoverAnchor = anchor;
+  state.rowAi.action = actionId;
+  state.rowAi.isLoading = true;
+  state.rowAi.answer = null;
+  state.rowAi.error = "";
+  state.rowAi.webSearch = null;
+  state.rowAi.citations = null;
+  renderTable();
+  renderRowAiOverlay();
+
+  try {
+    if (!state.ai.contextReady || state.ai.contextDirty) {
+      await syncAiContext();
+    }
+    const result = await postJson("/api/ai/ask", {
+      question: rowAiPrompt(row, actionId),
+      selectedParamName: row.name,
+      focusedParamNames: [row.name],
+      settings: aiSettingsFromInputs(),
+      isolated: true
+    });
+    state.rowAi.answer = result.answer || null;
+    state.rowAi.webSearch = result.webSearch || null;
+    state.rowAi.citations = result.citations || null;
+  } catch (error) {
+    state.rowAi.error = `AI request failed: ${error.message}`;
+    state.rowAi.webSearch = {
+      enabled: elements.aiWebSearchInput.checked,
+      used: false,
+      callCount: 0
+    };
+  } finally {
+    state.rowAi.isLoading = false;
+    renderRowAiOverlay();
   }
 }
 
@@ -1191,12 +1561,108 @@ function linkElement(url, title) {
   return link;
 }
 
+function sanitizeMarkdownNode(root) {
+  const allowedTags = new Set([
+    "A", "BLOCKQUOTE", "BR", "CODE", "EM", "H1", "H2", "H3", "H4", "HR", "LI", "OL", "P", "PRE", "STRONG", "TABLE", "TBODY",
+    "TD", "TH", "THEAD", "TR", "UL"
+  ]);
+  const allowedAttributes = {
+    A: new Set(["href", "title", "target", "rel"])
+  };
+
+  Array.from(root.querySelectorAll("*")).forEach((node) => {
+    if (!allowedTags.has(node.tagName)) {
+      node.replaceWith(...Array.from(node.childNodes));
+      return;
+    }
+
+    Array.from(node.attributes).forEach((attribute) => {
+      const allowed = allowedAttributes[node.tagName]?.has(attribute.name);
+      if (!allowed) {
+        node.removeAttribute(attribute.name);
+      }
+    });
+
+    if (node.tagName === "A") {
+      const href = node.getAttribute("href") || "";
+      if (!/^https?:\/\//i.test(href)) {
+        node.removeAttribute("href");
+      }
+      node.setAttribute("target", "_blank");
+      node.setAttribute("rel", "noreferrer");
+    }
+  });
+}
+
+function inlineMarkdownFallback(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label, url) => {
+    return `<a href="${url}" target="_blank" rel="noreferrer">${label}</a>`;
+  });
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  return html;
+}
+
+function fallbackMarkdownHtml(markdown) {
+  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+  const chunks = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+
+    if (/^#{1,4}\s+/.test(line)) {
+      const level = Math.min(4, line.match(/^#+/)[0].length);
+      chunks.push(`<h${level}>${inlineMarkdownFallback(line.replace(/^#{1,4}\s+/, ""))}</h${level}>`);
+      index += 1;
+      continue;
+    }
+
+    if (/^\s*([-*]|\d+\.)\s+/.test(line)) {
+      const ordered = /^\s*\d+\.\s+/.test(line);
+      const items = [];
+      while (index < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[index])) {
+        items.push(`<li>${inlineMarkdownFallback(lines[index].replace(/^\s*([-*]|\d+\.)\s+/, ""))}</li>`);
+        index += 1;
+      }
+      chunks.push(`<${ordered ? "ol" : "ul"}>${items.join("")}</${ordered ? "ol" : "ul"}>`);
+      continue;
+    }
+
+    const paragraph = [];
+    while (index < lines.length && lines[index].trim() && !/^#{1,4}\s+/.test(lines[index]) && !/^\s*([-*]|\d+\.)\s+/.test(lines[index])) {
+      paragraph.push(lines[index].trim());
+      index += 1;
+    }
+    chunks.push(`<p>${inlineMarkdownFallback(paragraph.join(" "))}</p>`);
+  }
+
+  return chunks.join("");
+}
+
+function renderMarkdown(markdown) {
+  const root = document.createElement("div");
+  root.className = "markdown-body";
+  const parser = window.marked?.parse || window.marked;
+  root.innerHTML = typeof parser === "function"
+    ? parser(markdown || "", { breaks: true, gfm: true })
+    : fallbackMarkdownHtml(markdown || "");
+  sanitizeMarkdownNode(root);
+  return root;
+}
+
 function renderAiMessages() {
   elements.aiChatLog.innerHTML = "";
   if (!state.ai.messages.length) {
     const empty = document.createElement("div");
     empty.className = "ai-empty";
-    empty.textContent = "Connect AI, run a comparison, focus one or more params, then ask a question.";
+    empty.textContent = "Select a parameter or add rows to Ask about, then ask a question.";
     elements.aiChatLog.appendChild(empty);
     return;
   }
@@ -1218,17 +1684,27 @@ function renderAiMessages() {
     }
 
     const answer = message.payload.answer || {};
-    body.textContent = answer.answer_markdown || "No answer returned.";
+    body.appendChild(renderMarkdown(answer.answer_markdown || "No answer returned."));
     card.append(header, body);
 
     const meta = document.createElement("div");
     meta.className = "ai-meta-list";
     const chips = [];
     if (answer.focus_params_used?.length) {
-      chips.push(`Focus: ${answer.focus_params_used.join(", ")}`);
+      chips.push(`Asked about: ${answer.focus_params_used.join(", ")}`);
     }
     if (answer.referenced_params?.length) {
       chips.push(`Referenced: ${answer.referenced_params.join(", ")}`);
+    }
+    if (message.payload.webSearch) {
+      const webSearch = message.payload.webSearch;
+      if (!webSearch.enabled) {
+        chips.push("Web search off");
+      } else if (webSearch.used) {
+        chips.push(`Web search used${webSearch.callCount > 1 ? ` (${webSearch.callCount} searches)` : ""}`);
+      } else {
+        chips.push("No web search");
+      }
     }
     if (message.payload.effectiveSettings) {
       chips.push(`Model: ${message.payload.effectiveSettings.model}, reasoning: ${message.payload.effectiveSettings.reasoning_effort}`);
@@ -1255,17 +1731,12 @@ function renderAiMessages() {
     }
 
     const citations = message.payload.citations || {};
-    if (citations.web?.length || citations.files?.length) {
+    if (citations.web?.length) {
       const list = document.createElement("div");
       list.className = "ai-citation-list";
       citations.web?.forEach((citation) => {
         const item = document.createElement("div");
         item.append("Web: ", linkElement(citation.url, citation.title));
-        list.appendChild(item);
-      });
-      citations.files?.forEach((citation) => {
-        const item = document.createElement("div");
-        item.textContent = `File search: ${citation.filename || citation.file_id || "context file"}`;
         list.appendChild(item);
       });
       card.appendChild(list);
@@ -1278,14 +1749,15 @@ function renderAiMessages() {
 }
 
 async function askAi(question) {
-  openAiPanel("chat");
+  if (!state.ai.sessionReady) {
+    setAiSessionStatus("Connect AI before asking a question.");
+    openAiSetup();
+    return;
+  }
+  openAiPanel();
   const prompt = (question || elements.aiQuestionInput.value).trim();
   if (!prompt) {
     setAiContextStatus("Ask a question first.");
-    return;
-  }
-  if (!state.ai.sessionReady) {
-    setAiSessionStatus("Connect AI before asking a question.");
     return;
   }
   if (!state.allRows.length) {
@@ -1322,6 +1794,11 @@ async function askAi(question) {
         source_notes: ""
       },
       citations: { web: [], files: [] },
+      webSearch: {
+        enabled: elements.aiWebSearchInput.checked,
+        used: false,
+        callCount: 0
+      },
       effectiveSettings: aiSettingsFromInputs()
     });
     setAiContextStatus(`AI request failed: ${error.message}`);
@@ -1343,11 +1820,13 @@ async function cleanupAi() {
     state.ai.sessionReady = false;
     state.ai.contextReady = false;
     state.ai.contextDirty = true;
+    state.ai.settingsOpen = false;
     state.ai.messages = [];
     renderAiMessages();
-    setAiSessionStatus("API key not connected");
-    setAiContextStatus("Run a comparison before preparing context.");
+    setAiSessionStatus("AI not connected");
+    setAiContextStatus("Run a comparison before asking.");
     setAiBusy(false);
+    closeAiPanel();
   }
 }
 
@@ -1498,11 +1977,22 @@ function selectRow(rowId) {
 
   const selectedName = currentSelectedRow()?.name || "";
   if (!state.focusedParamNames.size && previousSelectedName !== selectedName) {
-    markAiContextDirty("Selected param changed. Prepare context before the next AI answer.");
+    markAiContextDirty("Selected parameter changed. Context will refresh before the next answer.");
   }
 }
 
 function handleTableClick(event) {
+  const rowAiButton = event.target.closest("[data-row-ai-menu]");
+  if (rowAiButton) {
+    event.stopPropagation();
+    hideTooltip();
+    const rowElement = rowAiButton.closest("tr[data-row-id]");
+    if (rowElement) {
+      selectRow(rowElement.dataset.rowId);
+      toggleRowAiMenu(rowAiButton.dataset.rowAiMenu, rowAiButton);
+    }
+    return;
+  }
   const focusButton = event.target.closest("[data-focus-param]");
   if (focusButton) {
     event.stopPropagation();
@@ -1514,6 +2004,27 @@ function handleTableClick(event) {
     return;
   }
   selectRow(rowElement.dataset.rowId);
+}
+
+function handleRowAiLayerClick(event) {
+  const closeButton = event.target.closest("[data-row-ai-close]");
+  if (closeButton) {
+    closeRowAi();
+    return;
+  }
+
+  const openChatButton = event.target.closest("[data-row-ai-open-chat]");
+  if (openChatButton) {
+    openRowInChat(state.rowAi.activeMenuRowId);
+    return;
+  }
+
+  const actionButton = event.target.closest("[data-row-ai-action]");
+  if (actionButton) {
+    const rowId = state.rowAi.activeMenuRowId;
+    const anchor = state.rowAi.menuAnchor || actionButton.getBoundingClientRect();
+    askRowAi(rowId, actionButton.dataset.rowAiAction, anchor);
+  }
 }
 
 function handleTableKeydown(event) {
@@ -1529,6 +2040,10 @@ function handleTableKeydown(event) {
 }
 
 function handleTableMove(event) {
+  if (event.target.closest("[data-row-ai-menu]") || state.rowAi.activeMenuRowId || state.rowAi.popoverRowId) {
+    hideTooltip();
+    return;
+  }
   const rowElement = event.target.closest("tr[data-row-id]");
   if (!rowElement) {
     hideTooltip();
@@ -1581,12 +2096,12 @@ function initializeEvents() {
       .filter((row) => row.status === "changed")
       .forEach((row) => state.focusedParamNames.add(row.name));
     renderTable();
-    markAiContextDirty("Focused visible changed params. Prepare AI context.");
+    markAiContextDirty("Visible changed parameters added. Context will refresh before the next answer.");
   });
   elements.clearVisibleFocusButton.addEventListener("click", () => {
     state.filteredRows.forEach((row) => state.focusedParamNames.delete(row.name));
     renderTable();
-    markAiContextDirty("Visible focus cleared. Prepare AI context.");
+    markAiContextDirty("Visible Ask about selection cleared. Context will refresh before the next answer.");
   });
   elements.toggleFocusSelectedButton.addEventListener("click", () => {
     const selected = currentSelectedRow();
@@ -1594,28 +2109,28 @@ function initializeEvents() {
       toggleFocusedParam(selected.name);
     }
   });
-  elements.openAiButton.addEventListener("click", () => openAiPanel("chat"));
-  elements.aiLauncherButton.addEventListener("click", () => openAiPanel("chat"));
+  elements.openAiButton.addEventListener("click", openAiPanel);
+  elements.aiLauncherButton.addEventListener("click", openAiPanel);
   elements.closeAiDrawerButton.addEventListener("click", closeAiPanel);
   elements.aiDrawerBackdrop.addEventListener("click", closeAiPanel);
-  elements.aiTabButtons.forEach((button) => {
-    button.addEventListener("click", () => setAiTab(button.dataset.aiTab));
-  });
-  elements.aiChatConnectButton.addEventListener("click", () => setAiTab("setup"));
+  elements.aiSettingsButton.addEventListener("click", toggleAiSettings);
+  elements.closeAiSettingsButton.addEventListener("click", closeAiSettings);
+  elements.closeAiSetupButton.addEventListener("click", closeAiSetup);
+  elements.aiSetupBackdrop.addEventListener("click", closeAiSetup);
   elements.clearInspectorFocusButton.addEventListener("click", () => {
     state.focusedParamNames.clear();
     renderTable();
-    markAiContextDirty("Focus cleared. Prepare AI context.");
+    markAiContextDirty("Ask about selection cleared. Context will refresh before the next answer.");
   });
   elements.clearAllFocusButton.addEventListener("click", () => {
     state.focusedParamNames.clear();
     renderTable();
-    markAiContextDirty("Focus cleared. Prepare AI context.");
+    markAiContextDirty("Ask about selection cleared. Context will refresh before the next answer.");
   });
-  elements.connectAiButton.addEventListener("click", connectAiSession);
-  elements.prepareAiContextButton.addEventListener("click", () => {
-    syncAiContext().catch(() => {});
-  });
+  elements.connectAiButton.addEventListener("click", () => connectAiSession());
+  elements.useServerAiKeyButton.addEventListener("click", () => connectAiSession({ useServerKey: true }));
+  elements.useStoredAiKeyButton.addEventListener("click", () => connectAiSession({ useDesktopStoredKey: true }));
+  elements.clearStoredAiKeyButton.addEventListener("click", clearStoredAiKey);
   elements.cleanupAiButton.addEventListener("click", cleanupAi);
   elements.askAiButton.addEventListener("click", () => askAi());
   elements.aiQuestionInput.addEventListener("keydown", (event) => {
@@ -1649,10 +2164,38 @@ function initializeEvents() {
   elements.resultsBody.addEventListener("keydown", handleTableKeydown);
   elements.resultsBody.addEventListener("mousemove", handleTableMove);
   elements.resultsBody.addEventListener("mouseleave", hideTooltip);
-  window.addEventListener("scroll", hideTooltip, { passive: true });
-  window.addEventListener("resize", hideTooltip);
+  elements.rowAiLayer.addEventListener("click", handleRowAiLayerClick);
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".row-ai-layer") || event.target.closest("[data-row-ai-menu]")) {
+      return;
+    }
+    if (state.rowAi.activeMenuRowId || state.rowAi.popoverRowId) {
+      closeRowAi();
+    }
+  });
+  window.addEventListener("scroll", () => {
+    hideTooltip();
+    if (state.rowAi.activeMenuRowId || state.rowAi.popoverRowId) {
+      closeRowAi();
+    }
+  }, { passive: true });
+  window.addEventListener("resize", () => {
+    hideTooltip();
+    if (state.rowAi.activeMenuRowId || state.rowAi.popoverRowId) {
+      closeRowAi();
+    }
+  });
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && state.ai.panelOpen) {
+    if (event.key !== "Escape") {
+      return;
+    }
+    if (state.rowAi.activeMenuRowId || state.rowAi.popoverRowId) {
+      closeRowAi();
+    } else if (state.ai.settingsOpen) {
+      closeAiSettings();
+    } else if (state.ai.setupOpen) {
+      closeAiSetup();
+    } else if (state.ai.panelOpen) {
       closeAiPanel();
     }
   });
@@ -1663,6 +2206,6 @@ syncFilterAvailability();
 clearDetails();
 renderFocusChips();
 renderAiMessages();
-setAiTab("chat");
 syncAiShellState();
 setAiBusy(false);
+refreshAiAvailability();

@@ -3,13 +3,67 @@
   "version": "1.0.0",
   "private": true,
   "description": "Static ArduPilot parameter comparison tool with an OpenAI-powered parameter assistant.",
-  "main": "server.js",
+  "author": "ArduPilot Param Compare",
+  "main": "electron-main.js",
   "scripts": {
+    "desktop": "electron .",
+    "dist": "electron-builder -c.forceCodeSigning=true",
+    "pack": "electron-builder --dir -c.win.signAndEditExecutable=false",
     "start": "node server.js",
     "test": "node --test"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "marked": "^18.0.3"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "electron": "^38.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.ardupilot.paramcompare",
+    "productName": "ArduPilot Param Compare",
+    "asar": true,
+    "files": [
+      "app.js",
+      "desktop-key-store.js",
+      "electron-main.js",
+      "index.html",
+      "server.js",
+      "styles.css",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    }
+  }
 }

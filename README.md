@@ -43,6 +43,37 @@ To use a different port:
 PORT=8080 npm start
 ```
 
+## Run as a Desktop App
+
+```bash
+npm run desktop
+```
+
+The Electron app starts the existing Express server on a random local loopback
+port and opens it in a native desktop window.
+
+Desktop builds can remember the optional OpenAI API key on the current device.
+Saved keys are encrypted with Electron's `safeStorage` support and stored under
+the app's user data directory. The browser version still keeps pasted keys in
+backend memory only.
+
+## Build Desktop Packages
+
+```bash
+npm run pack
+npm run dist
+```
+
+`npm run pack` creates an unpacked app for local inspection. `npm run dist`
+creates the configured Windows, macOS, or Linux package for the host platform in
+`release/`.
+
+For public signed releases, provide platform signing credentials through
+electron-builder's standard environment variables before running `npm run dist`.
+Windows builds use the NSIS target. macOS builds use hardened runtime and require
+Developer ID signing plus notarization credentials for distribution outside a
+development machine.
+
 ## Run Tests
 
 ```bash
@@ -86,23 +117,23 @@ To use it:
 
 1. Run a comparison.
 2. Open the `AI` drawer.
-3. Enter an OpenAI API key in `Setup` and connect.
-4. Focus one or more rows with the focus controls.
-5. Prepare context if it has not already been prepared.
-6. Ask a question from the chat tab.
+3. Connect with the server's `OPENAI_API_KEY`, or enter a temporary OpenAI API
+   key for the local session.
+4. Select a parameter or add rows to `Ask about`.
+5. Ask a question from the chat drawer.
 
 The backend keeps the API key in server memory only and stores a session cookie
 named `param_compare_ai_session` in the browser. Sessions expire after eight
 hours or when you disconnect.
 
-When AI context is prepared, the backend uploads summarized comparison and
-metadata documents to an OpenAI vector store so the assistant can answer against
-the loaded files. Disconnecting calls cleanup for the uploaded context and clears
-the local session.
+When AI context is prepared, the backend keeps the loaded comparison and metadata
+in the local session and exposes it to the model through structured tools.
 
-AI settings exposed in the drawer include model, reasoning effort, verbosity,
-maximum output tokens, service tier, temperature, web search, web context size,
-and live web access.
+AI context is prepared automatically after connection, after comparison changes,
+and before an answer if the selected rows changed. Advanced settings are hidden
+behind the drawer's settings control and include model, reasoning effort,
+verbosity, maximum output tokens, service tier, temperature, web search, web
+context size, and live web access.
 
 ## Environment Variables
 
@@ -110,12 +141,15 @@ and live web access.
 | --- | --- | --- |
 | `PORT` | `8000` | Local Express server port |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
+| `OPENAI_API_KEY` | unset | Optional server-side key for one-click local AI setup |
 
 ## Project Structure
 
 ```text
 .
 ├── app.js              # Browser comparison UI and client-side parsing/export logic
+├── desktop-key-store.js # Electron encrypted desktop settings storage
+├── electron-main.js    # Electron shell that hosts the local Express app
 ├── index.html          # App shell
 ├── server.js           # Express server and AI assistant endpoints
 ├── styles.css          # App styling
@@ -127,7 +161,7 @@ and live web access.
 ## Notes
 
 - Parameter comparison and exports happen in the browser.
-- AI calls and vector-store setup go through the local Express server.
+- AI calls and in-memory comparison context go through the local Express server.
 - Treat AI output as assistance, not flight-safety certainty. Check important
   changes against official ArduPilot documentation, metadata, source, and
   controlled validation.

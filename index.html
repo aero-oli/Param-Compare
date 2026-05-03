@@ -125,8 +125,8 @@
               <h2>Parameter changes</h2>
             </div>
             <div class="toolbar-actions">
-              <button id="focusVisibleChangedButton" class="ghost-button" type="button">Focus visible changed</button>
-              <button id="clearVisibleFocusButton" class="ghost-button" type="button">Clear visible focus</button>
+              <button id="focusVisibleChangedButton" class="ghost-button" type="button">Ask about visible changed</button>
+              <button id="clearVisibleFocusButton" class="ghost-button" type="button">Clear ask about</button>
               <button id="exportHtmlButton" class="ghost-button" type="button">Export HTML</button>
               <button id="exportCsvButton" class="ghost-button" type="button">Export CSV</button>
             </div>
@@ -150,7 +150,7 @@
             <table id="resultsTable">
               <thead>
                 <tr>
-                  <th>Focus</th>
+                  <th>Ask</th>
                   <th>Impact</th>
                   <th>Parameter</th>
                   <th>Old value</th>
@@ -175,15 +175,15 @@
             <div class="inspector-title-row">
               <h2>Selected parameter</h2>
               <div class="inspector-actions">
-                <button id="toggleFocusSelectedButton" class="dark-button" type="button">Focus</button>
+                <button id="toggleFocusSelectedButton" class="dark-button" type="button">Ask about</button>
                 <button id="openAiButton" class="dark-button dark-button-primary" type="button">Ask AI</button>
               </div>
             </div>
           </div>
 
-          <section class="inspector-focus-panel" aria-label="AI focused parameters">
+          <section class="inspector-focus-panel" aria-label="Parameters to ask AI about">
             <div class="inspector-focus-header">
-              <p class="eyebrow">AI focus</p>
+              <p class="eyebrow">Ask about</p>
               <button id="clearInspectorFocusButton" class="text-button" type="button">Clear</button>
             </div>
             <div id="inspectorFocusedParamChips" class="chip-list chip-list-dark"></div>
@@ -211,6 +211,7 @@
   </div>
 
   <div id="tooltip" class="tooltip" hidden></div>
+  <div id="rowAiLayer" class="row-ai-layer" hidden></div>
 
   <button id="aiLauncherButton" class="ai-launcher" type="button" aria-controls="aiAssistantDrawer" aria-expanded="false">AI</button>
 
@@ -220,69 +221,90 @@
     <div class="ai-drawer-header">
       <div>
         <p class="eyebrow">AI assistant</p>
-        <h2>Ask about focused params</h2>
+        <h2>Ask about this comparison</h2>
+      </div>
+      <div class="ai-drawer-actions">
+        <button id="aiSettingsButton" class="ghost-button" type="button" aria-controls="aiSettingsPanel" aria-expanded="false">Settings</button>
+        <button id="cleanupAiButton" class="ghost-button" type="button">Disconnect</button>
       </div>
       <button id="closeAiDrawerButton" class="icon-button" type="button" aria-label="Close AI assistant">×</button>
     </div>
 
-    <div class="ai-tabs" role="tablist" aria-label="AI assistant sections">
-      <button class="ai-tab is-active" type="button" role="tab" aria-selected="true" data-ai-tab="chat">Chat</button>
-      <button class="ai-tab" type="button" role="tab" aria-selected="false" data-ai-tab="setup">Setup</button>
-      <button class="ai-tab" type="button" role="tab" aria-selected="false" data-ai-tab="settings">Settings</button>
-    </div>
-
-    <section id="aiTabChat" class="ai-tab-panel is-active" role="tabpanel">
-      <div id="aiChatSetupNotice" class="ai-chat-notice">
-        <span>Connect AI before asking questions.</span>
-        <button id="aiChatConnectButton" class="text-button" type="button">Setup</button>
-      </div>
-
+    <section class="ai-chat-panel">
       <div class="focus-bar">
         <div>
-          <p class="status-label">Focused params</p>
+          <p class="status-label">Ask about</p>
           <div id="focusedParamChips" class="chip-list"></div>
         </div>
-        <button id="clearAllFocusButton" class="ghost-button" type="button">Clear focus</button>
+        <button id="clearAllFocusButton" class="ghost-button" type="button">Clear</button>
       </div>
 
       <div class="quick-prompts" aria-label="Quick AI prompts">
         <button class="ghost-button quick-prompt" type="button" data-prompt="Explain this change using the loaded metadata and comparison values.">Explain this change</button>
-        <button class="ghost-button quick-prompt" type="button" data-prompt="Compare these focused parameters and explain how they may interact.">Compare these params</button>
+        <button class="ghost-button quick-prompt" type="button" data-prompt="Compare these selected parameters and explain how they may interact.">Compare these params</button>
         <button class="ghost-button quick-prompt" type="button" data-prompt="Find related parameters and explain why they matter.">Find related params</button>
         <button class="ghost-button quick-prompt" type="button" data-prompt="What could this affect in flight, and what uncertainty should I be aware of?">Flight impact</button>
       </div>
 
       <div id="aiChatLog" class="ai-chat-log" aria-live="polite">
-        <div class="ai-empty">Focus one or more params, then ask a question.</div>
+        <div class="ai-empty">Select a parameter or add rows to Ask about, then ask a question.</div>
       </div>
 
       <div class="ai-question-row">
         <label class="search-field">
           <span>Question</span>
-          <textarea id="aiQuestionInput" placeholder="Ask about the selected or focused parameters"></textarea>
+          <textarea id="aiQuestionInput" placeholder="Ask about the selected parameters"></textarea>
         </label>
         <button id="askAiButton" class="primary-button" type="button">Ask</button>
       </div>
-    </section>
 
-    <section id="aiTabSetup" class="ai-tab-panel" role="tabpanel" hidden>
-      <div class="ai-status-stack">
-        <span id="aiSessionStatus">API key not connected</span>
-        <span id="aiContextStatus">Run a comparison before preparing context.</span>
+      <div class="ai-status-line" aria-live="polite">
+        <span id="aiSessionStatus">AI not connected</span>
+        <span id="aiContextStatus">Run a comparison before asking.</span>
       </div>
+    </section>
+  </aside>
 
-      <div class="ai-setup-grid">
+  <div id="aiSetupBackdrop" class="ai-modal-backdrop" hidden></div>
+
+  <section id="aiSetupSheet" class="ai-setup-sheet" role="dialog" aria-modal="true" aria-labelledby="aiSetupTitle" hidden>
+    <div class="ai-sheet-header">
+      <div>
+        <p class="eyebrow">AI setup</p>
+        <h2 id="aiSetupTitle">Connect once, then just ask</h2>
+      </div>
+      <button id="closeAiSetupButton" class="icon-button" type="button" aria-label="Close AI setup">×</button>
+    </div>
+    <p id="aiSetupIntro" class="ai-setup-copy">Use a temporary OpenAI API key for this local browser session. The key is sent to the local server and kept in memory only.</p>
+    <div class="ai-setup-actions">
+      <button id="useServerAiKeyButton" class="primary-button" type="button" hidden>Use local OpenAI key</button>
+      <button id="useStoredAiKeyButton" class="primary-button" type="button" hidden>Use saved desktop key</button>
+      <div id="manualAiKeyFields" class="ai-key-fields">
         <label class="field">
           <span>OpenAI API key</span>
           <input id="openAiKeyInput" type="password" placeholder="sk-...">
         </label>
+        <label class="ai-save-key-option">
+          <input id="rememberOpenAiKeyInput" type="checkbox">
+          <span>Remember this key on this device</span>
+        </label>
+        <div class="ai-stored-key-row">
+          <span id="storedAiKeyStatus" class="ai-stored-key-status" hidden></span>
+          <button id="clearStoredAiKeyButton" class="text-button" type="button" hidden>Forget saved key</button>
+        </div>
         <button id="connectAiButton" class="primary-button" type="button">Connect AI</button>
-        <button id="prepareAiContextButton" class="ghost-button" type="button">Prepare context</button>
-        <button id="cleanupAiButton" class="ghost-button" type="button">Disconnect</button>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="aiTabSettings" class="ai-tab-panel" role="tabpanel" hidden>
+  <section id="aiSettingsPanel" class="ai-settings-panel-drawer" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle" hidden>
+    <div class="ai-sheet-header">
+      <div>
+        <p class="eyebrow">AI settings</p>
+        <h2 id="aiSettingsTitle">Advanced defaults</h2>
+      </div>
+      <button id="closeAiSettingsButton" class="icon-button" type="button" aria-label="Close AI settings">×</button>
+    </div>
       <div class="ai-settings-grid">
         <label class="field">
           <span>Model</span>
@@ -340,9 +362,9 @@
           <input id="aiTemperatureInput" type="number" min="0" max="2" step="0.1" placeholder="model default">
         </label>
       </div>
-    </section>
-  </aside>
+  </section>
 
+  <script src="./vendor/marked.umd.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
