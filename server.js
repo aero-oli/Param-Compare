@@ -290,7 +290,7 @@ function sanitizeSettings(raw = {}) {
       : 2400,
     service_tier: allowedTier.has(raw.service_tier) ? raw.service_tier : "auto",
     web_search_enabled: raw.web_search_enabled !== false,
-    web_search_context_size: allowedSearchSize.has(raw.web_search_context_size) ? raw.web_search_context_size : "medium",
+    web_search_context_size: allowedSearchSize.has(raw.web_search_context_size) ? raw.web_search_context_size : "high",
     external_web_access: raw.external_web_access !== false,
     temperature: raw.temperature === "" || raw.temperature === null || raw.temperature === undefined
       ? null
@@ -298,6 +298,9 @@ function sanitizeSettings(raw = {}) {
   };
   if (!Number.isFinite(settings.temperature)) {
     settings.temperature = null;
+  }
+  if (settings.web_search_enabled && settings.reasoning_effort === "minimal") {
+    settings.reasoning_effort = "low";
   }
   return settings;
 }
@@ -491,11 +494,15 @@ function answerSchema() {
   };
 }
 
-function buildInstructions() {
+function buildInstructions(settings = {}) {
   return [
     "You are an ArduPilot Copter parameter assistant inside a parameter comparison app.",
     "Use loaded comparison data and loaded versioned metadata as authoritative for the user's files.",
+    settings.web_search_enabled
+      ? "Web search is enabled. Before answering parameter meaning, change impact, risk, troubleshooting, or related-parameter questions, use web search to ground the answer unless the user only asks to restate loaded old/new values."
+      : "Web search is disabled. Say when an answer cannot be grounded beyond the loaded comparison and metadata.",
     "Use official ArduPilot docs, source, and autotest metadata as the strongest external sources.",
+    "When searching the web, prefer ardupilot.org documentation, ArduPilot source on GitHub, and autotest parameter metadata before community sources.",
     "Use forums, user guides, GitHub issues, blog posts, and community material only as operational context when official or loaded data is not clear.",
     "When community sources conflict or are anecdotal, say so clearly.",
     "If the user asks about params outside the focused set, you may search loaded params and explain that you expanded beyond focus.",
@@ -598,17 +605,22 @@ function responseBody(question, session, settings, current, previousResponseId, 
         `Selected parameter: ${current.selectedParamName || "none"}`,
         `Focused parameters: ${safeArray(current.focusedParamNames, 250).join(", ") || "none"}`,
         `Firmware/version ref: ${session.context?.versionRef || "not specified"}`,
-        `Metadata source: ${session.context?.metadataSource || "not specified"}`
+        `Metadata source: ${session.context?.metadataSource || "not specified"}`,
+        settings.web_search_enabled
+          ? "Grounding directive: use web search for current official or source-backed context before finalizing the answer."
+          : "Grounding directive: web search is off; rely only on loaded comparison and metadata."
       ].join("\n")
     }]
   }];
+  const tools = buildResponseTools(session, settings);
+  const shouldRequireInitialTool = settings.web_search_enabled && !toolOutputs;
 
   const body = {
     model: settings.model,
-    instructions: buildInstructions(),
+    instructions: buildInstructions(settings),
     input,
-    tools: buildResponseTools(session, settings),
-    tool_choice: "auto",
+    tools,
+    tool_choice: shouldRequireInitialTool ? "required" : "auto",
     max_output_tokens: settings.max_output_tokens,
     text: {
       format: answerSchema(),

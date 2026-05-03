@@ -115,9 +115,19 @@ test("sanitizeSettings clamps and defaults AI settings", () => {
   assert.equal(settings.max_output_tokens, 12000);
   assert.equal(settings.service_tier, "auto");
   assert.equal(settings.web_search_enabled, false);
-  assert.equal(settings.web_search_context_size, "medium");
+  assert.equal(settings.web_search_context_size, "high");
   assert.equal(settings.external_web_access, false);
   assert.equal(settings.temperature, 2);
+});
+
+test("sanitizeSettings keeps web search compatible defaults", () => {
+  const settings = sanitizeSettings({
+    reasoning_effort: "minimal",
+    web_search_enabled: true
+  });
+
+  assert.equal(settings.reasoning_effort, "low");
+  assert.equal(settings.web_search_context_size, "high");
 });
 
 test("buildContextDocuments includes focus and diff documents", () => {

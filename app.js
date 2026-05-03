@@ -21,7 +21,7 @@ const DEFAULT_AI_SETTINGS = {
   max_output_tokens: 2400,
   service_tier: "auto",
   web_search_enabled: true,
-  web_search_context_size: "medium",
+  web_search_context_size: "high",
   external_web_access: true,
   temperature: null
 };
@@ -1329,6 +1329,8 @@ function rowAiPrompt(row, actionId) {
   return [
     action.prompt,
     "",
+    "If web search is enabled, search official ArduPilot sources before answering so this row answer is grounded in current documentation or source-backed context.",
+    "",
     `Parameter: ${row.name}`,
     `Status: ${STATUS_LABELS[row.status] || row.status}`,
     `Old value: ${row.oldValue || "not present"}`,
@@ -2007,6 +2009,8 @@ function handleTableClick(event) {
 }
 
 function handleRowAiLayerClick(event) {
+  event.stopPropagation();
+
   const closeButton = event.target.closest("[data-row-ai-close]");
   if (closeButton) {
     closeRowAi();
