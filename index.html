@@ -125,8 +125,8 @@
               <h2>Parameter changes</h2>
             </div>
             <div class="toolbar-actions">
-              <button id="focusVisibleChangedButton" class="ghost-button" type="button">Ask about visible changed</button>
-              <button id="clearVisibleFocusButton" class="ghost-button" type="button">Clear ask about</button>
+              <button id="focusVisibleChangedButton" class="ghost-button" type="button">Add visible changed to AI context</button>
+              <button id="clearVisibleFocusButton" class="ghost-button" type="button">Clear AI context</button>
               <button id="exportHtmlButton" class="ghost-button" type="button">Export HTML</button>
               <button id="exportCsvButton" class="ghost-button" type="button">Export CSV</button>
             </div>
@@ -175,17 +175,18 @@
             <div class="inspector-title-row">
               <h2>Selected parameter</h2>
               <div class="inspector-actions">
-                <button id="toggleFocusSelectedButton" class="dark-button" type="button">Ask about</button>
-                <button id="openAiButton" class="dark-button dark-button-primary" type="button">Ask AI</button>
+                <button id="toggleFocusSelectedButton" class="dark-button" type="button">Add to AI context</button>
+                <button id="openAiButton" class="dark-button dark-button-primary" type="button">Open AI chat</button>
               </div>
             </div>
           </div>
 
-          <section class="inspector-focus-panel" aria-label="Parameters to ask AI about">
+          <section class="inspector-focus-panel" aria-label="Parameters included in AI context">
             <div class="inspector-focus-header">
-              <p class="eyebrow">Ask about</p>
-              <button id="clearInspectorFocusButton" class="text-button" type="button">Clear</button>
+              <p class="eyebrow">AI context</p>
+              <button id="clearInspectorFocusButton" class="text-button" type="button">Clear context</button>
             </div>
+            <p class="context-help">These parameters are sent with your next AI chat question. If empty, the selected row is used.</p>
             <div id="inspectorFocusedParamChips" class="chip-list chip-list-dark"></div>
           </section>
 
@@ -221,7 +222,7 @@
     <div class="ai-drawer-header">
       <div>
         <p class="eyebrow">AI assistant</p>
-        <h2>Ask about this comparison</h2>
+        <h2>AI chat</h2>
       </div>
       <div class="ai-drawer-actions">
         <button id="aiSettingsButton" class="ghost-button" type="button" aria-controls="aiSettingsPanel" aria-expanded="false">Settings</button>
@@ -233,10 +234,10 @@
     <section class="ai-chat-panel">
       <div class="focus-bar">
         <div>
-          <p class="status-label">Ask about</p>
+          <p class="status-label">AI context</p>
           <div id="focusedParamChips" class="chip-list"></div>
         </div>
-        <button id="clearAllFocusButton" class="ghost-button" type="button">Clear</button>
+        <button id="clearAllFocusButton" class="ghost-button" type="button">Clear context</button>
       </div>
 
       <div class="quick-prompts" aria-label="Quick AI prompts">
@@ -247,13 +248,13 @@
       </div>
 
       <div id="aiChatLog" class="ai-chat-log" aria-live="polite">
-        <div class="ai-empty">Select a parameter or add rows to Ask about, then ask a question.</div>
+        <div class="ai-empty">Select a parameter or add rows to AI context, then ask a question.</div>
       </div>
 
       <div class="ai-question-row">
         <label class="search-field">
           <span>Question</span>
-          <textarea id="aiQuestionInput" placeholder="Ask about the selected parameters"></textarea>
+          <textarea id="aiQuestionInput" placeholder="Ask about the AI context"></textarea>
         </label>
         <button id="askAiButton" class="primary-button" type="button">Ask</button>
       </div>

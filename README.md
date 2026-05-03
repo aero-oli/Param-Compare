@@ -98,7 +98,7 @@ To use it:
 2. Open the `AI` drawer.
 3. Use a saved desktop key, or enter an OpenAI API key for the current app
    session.
-4. Select a parameter or add rows to `Ask about`.
+4. Select a parameter or add rows to AI context.
 5. Ask a question from the chat drawer or use a row AI action.
 
 Saved keys are encrypted with Electron's `safeStorage` support and stored under

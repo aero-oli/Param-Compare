@@ -1021,6 +1021,13 @@ function markAiContextDirty(reason) {
   }
 }
 
+function syncAiContextSelection(reason) {
+  highlightSelectedRow();
+  renderFocusChips();
+  renderTable();
+  markAiContextDirty(reason || "AI context changed. Context will refresh before the next answer.");
+}
+
 function setFocusedParam(name, isFocused) {
   if (!name || !rowByName(name)) {
     return;
@@ -1030,14 +1037,11 @@ function setFocusedParam(name, isFocused) {
   } else {
     state.focusedParamNames.delete(name);
   }
-  highlightSelectedRow();
-  renderFocusChips();
-  markAiContextDirty("Ask about selection changed. Context will refresh before the next answer.");
+  syncAiContextSelection("AI context changed. Context will refresh before the next answer.");
 }
 
 function toggleFocusedParam(name) {
   setFocusedParam(name, !state.focusedParamNames.has(name));
-  renderTable();
 }
 
 function renderFocusChips() {
@@ -1053,10 +1057,12 @@ function renderFocusChips() {
     containers.forEach((container) => {
       const fallback = document.createElement("span");
       fallback.className = "focus-chip";
-      fallback.textContent = selected ? `Selected: ${selected.name}` : "No parameter selected";
+      fallback.textContent = selected
+        ? `Implicit: selected row (${selected.name})`
+        : "No AI context selected";
       container.appendChild(fallback);
     });
-    elements.toggleFocusSelectedButton.textContent = "Ask about";
+    elements.toggleFocusSelectedButton.textContent = "Add to AI context";
     elements.toggleFocusSelectedButton.disabled = !selected;
     return;
   }
@@ -1070,10 +1076,9 @@ function renderFocusChips() {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = "x";
-      button.setAttribute("aria-label", `Remove ${name} from Ask about`);
+      button.setAttribute("aria-label", `Remove ${name} from AI context`);
       button.addEventListener("click", () => {
         setFocusedParam(name, false);
-        renderTable();
       });
       chip.append(label, button);
       container.appendChild(chip);
@@ -1083,8 +1088,8 @@ function renderFocusChips() {
   const selected = currentSelectedRow();
   elements.toggleFocusSelectedButton.disabled = !selected;
   elements.toggleFocusSelectedButton.textContent = selected && state.focusedParamNames.has(selected.name)
-    ? "Remove"
-    : "Ask about";
+    ? "Remove from context"
+    : "Add to AI context";
 }
 
 function serializeMetadataEntries() {
@@ -1470,7 +1475,7 @@ function openRowInChat(rowId) {
   state.focusedParamNames.clear();
   state.focusedParamNames.add(row.name);
   selectRow(row.id);
-  markAiContextDirty("Ask about selection changed. Context will refresh before the next answer.");
+  markAiContextDirty("AI context changed. Context will refresh before the next answer.");
   state.rowAi.activeMenuRowId = "";
   renderTable();
   renderRowAiOverlay();
@@ -1645,7 +1650,7 @@ function renderAiMessages() {
   if (!state.ai.messages.length) {
     const empty = document.createElement("div");
     empty.className = "ai-empty";
-    empty.textContent = "Select a parameter or add rows to Ask about, then ask a question.";
+    empty.textContent = "Select a parameter or add rows to AI context, then ask a question.";
     elements.aiChatLog.appendChild(empty);
     return;
   }
@@ -1674,7 +1679,7 @@ function renderAiMessages() {
     meta.className = "ai-meta-list";
     const chips = [];
     if (answer.focus_params_used?.length) {
-      chips.push(`Asked about: ${answer.focus_params_used.join(", ")}`);
+      chips.push(`AI context: ${answer.focus_params_used.join(", ")}`);
     }
     if (answer.referenced_params?.length) {
       chips.push(`Referenced: ${answer.referenced_params.join(", ")}`);
@@ -2080,13 +2085,11 @@ function initializeEvents() {
     state.filteredRows
       .filter((row) => row.status === "changed")
       .forEach((row) => state.focusedParamNames.add(row.name));
-    renderTable();
-    markAiContextDirty("Visible changed parameters added. Context will refresh before the next answer.");
+    syncAiContextSelection("Visible changed parameters added to AI context. Context will refresh before the next answer.");
   });
   elements.clearVisibleFocusButton.addEventListener("click", () => {
     state.filteredRows.forEach((row) => state.focusedParamNames.delete(row.name));
-    renderTable();
-    markAiContextDirty("Visible Ask about selection cleared. Context will refresh before the next answer.");
+    syncAiContextSelection("Visible parameters removed from AI context. Context will refresh before the next answer.");
   });
   elements.toggleFocusSelectedButton.addEventListener("click", () => {
     const selected = currentSelectedRow();
@@ -2104,13 +2107,11 @@ function initializeEvents() {
   elements.aiSetupBackdrop.addEventListener("click", closeAiSetup);
   elements.clearInspectorFocusButton.addEventListener("click", () => {
     state.focusedParamNames.clear();
-    renderTable();
-    markAiContextDirty("Ask about selection cleared. Context will refresh before the next answer.");
+    syncAiContextSelection("AI context cleared. Context will refresh before the next answer.");
   });
   elements.clearAllFocusButton.addEventListener("click", () => {
     state.focusedParamNames.clear();
-    renderTable();
-    markAiContextDirty("Ask about selection cleared. Context will refresh before the next answer.");
+    syncAiContextSelection("AI context cleared. Context will refresh before the next answer.");
   });
   elements.connectAiButton.addEventListener("click", () => connectAiSession());
   elements.useStoredAiKeyButton.addEventListener("click", () => connectAiSession({ useDesktopStoredKey: true }));
