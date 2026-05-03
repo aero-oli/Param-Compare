@@ -1,6 +1,7 @@
 "use strict";
 
 const { app, BrowserWindow, Menu, safeStorage, shell } = require("electron");
+const path = require("path");
 const { createApp } = require("./server");
 const { createDesktopKeyStore } = require("./desktop-key-store");
 
@@ -21,6 +22,10 @@ function serverUrl(server) {
   return `http://127.0.0.1:${address.port}/`;
 }
 
+function windowIconPath() {
+  return path.join(__dirname, "assets", "icons", "icon.png");
+}
+
 async function createMainWindow() {
   const desktopKeyStore = createDesktopKeyStore({
     safeStorage,
@@ -35,6 +40,7 @@ async function createMainWindow() {
     minWidth: 980,
     minHeight: 680,
     title: "ArduPilot Param Compare",
+    icon: windowIconPath(),
     backgroundColor: "#151a1f",
     titleBarStyle: "hidden",
     titleBarOverlay: {

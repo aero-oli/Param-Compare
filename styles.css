@@ -3967,8 +3967,15 @@ body {
 .brand-block {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   min-width: 0;
+}
+
+.app-logo {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 5px;
 }
 
 .app-header h1 {

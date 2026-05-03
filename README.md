@@ -47,11 +47,46 @@ npm run dist
 
 `npm run pack` creates an unsigned unpacked app for local inspection in
 `release/`. `npm run dist` creates the configured Windows, macOS, or Linux
-package for the host platform and requires signing credentials.
+package for the host platform without publishing it.
+
+For public distribution, use the signed platform scripts through GitHub Actions:
+
+```bash
+npm run dist:win:signed
+npm run dist:linux
+```
 
 Windows builds use the NSIS target. macOS builds use hardened runtime and require
 Developer ID signing plus notarization credentials for distribution outside a
 development machine.
+
+## GitHub CI and Releases
+
+The repository includes two GitHub Actions workflows:
+
+- `CI` runs on pull requests and pushes to `main`/`master`. It installs with
+  `npm ci`, checks JavaScript syntax, runs tests, and builds an unpacked app.
+- `Release` runs when a `vX.Y.Z` tag is pushed or manually dispatched. It checks
+  that the tag matches `package.json`, builds a signed Windows installer and
+  Linux packages, then publishes a GitHub Release with generated release notes.
+
+Windows public releases intentionally fail unless these repository secrets are
+configured:
+
+| Secret | Purpose |
+| --- | --- |
+| `WIN_CSC_LINK` | Base64-encoded code-signing certificate, or a secure URL supported by electron-builder |
+| `WIN_CSC_KEY_PASSWORD` | Password for the Windows signing certificate |
+
+To publish a release:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The release workflow builds from that exact tag. Update `package.json` first so
+the package version matches the tag without the leading `v`.
 
 ## Run Tests
 
@@ -109,10 +144,10 @@ When AI context is prepared, the backend keeps the loaded comparison and metadat
 in the local app session and exposes it to the model through structured tools.
 
 AI context is prepared automatically after connection, after comparison changes,
-and before an answer if the selected rows changed. Advanced settings are hidden
-behind the drawer's settings control and include model, reasoning effort,
-verbosity, maximum output tokens, service tier, temperature, web search, web
-context size, and live web access.
+and before an answer if the selected rows changed. Advanced settings are on the
+Settings page and include model, reasoning effort, verbosity, maximum output
+tokens, service tier, temperature, web search, web context size, and live web
+access.
 
 ## Environment Variables
 
@@ -125,12 +160,15 @@ context size, and live web access.
 ```text
 .
 ├── app.js               # Renderer comparison UI and client-side parsing/export logic
+├── assets/icons/        # Runtime app logo used by the renderer and Electron window
+├── build/               # electron-builder app icons
 ├── desktop-key-store.js # Electron encrypted desktop settings storage
 ├── electron-main.js     # Electron shell that hosts the private Express backend
 ├── index.html           # App shell
 ├── server.js            # Private Express backend and AI assistant endpoints
 ├── styles.css           # App styling
 ├── tests/server.test.js
+├── .github/workflows/   # CI and GitHub Release automation
 ├── package.json
 └── README.md
 ```

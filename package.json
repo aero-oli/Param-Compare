@@ -1,13 +1,17 @@
 {
   "name": "ardupilot-param-compare",
   "version": "1.0.0",
-  "private": true,
+  "private": false,
   "description": "Static ArduPilot parameter comparison tool with an OpenAI-powered parameter assistant.",
   "author": "ArduPilot Param Compare",
   "main": "electron-main.js",
   "scripts": {
+    "check": "node --check app.js && node --check desktop-key-store.js && node --check electron-main.js && node --check server.js",
     "desktop": "electron .",
-    "dist": "electron-builder -c.forceCodeSigning=true",
+    "dist": "electron-builder --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
+    "dist:mac:signed": "electron-builder --mac --publish never -c.forceCodeSigning=true",
+    "dist:win:signed": "electron-builder --win --publish never -c.forceCodeSigning=true",
     "pack": "electron-builder --dir -c.win.signAndEditExecutable=false",
     "test": "node --test"
   },
@@ -24,6 +28,7 @@
     "productName": "ArduPilot Param Compare",
     "asar": true,
     "files": [
+      "assets/**/*",
       "app.js",
       "desktop-key-store.js",
       "electron-main.js",
@@ -37,6 +42,7 @@
       "output": "release"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
@@ -49,6 +55,7 @@
       "createStartMenuShortcut": true
     },
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
         "dmg",
         "zip"
@@ -58,6 +65,7 @@
       "gatekeeperAssess": false
     },
     "linux": {
+      "icon": "build/icon.png",
       "target": [
         "AppImage",
         "deb"
