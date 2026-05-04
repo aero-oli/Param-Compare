@@ -92,7 +92,7 @@ jobs:
         run: npm run dist:win
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-release
           path: |
@@ -131,7 +131,7 @@ jobs:
         run: npm run dist:linux
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-release
           path: |
@@ -174,7 +174,7 @@ jobs:
         run: npm run dist:mac
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-release
           path: |
@@ -212,7 +212,7 @@ jobs:
           subject-path: release-artifacts/*
 
       - name: Upload attested release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: attested-release
           path: release-artifacts/*
