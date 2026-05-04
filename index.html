@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ArduPilot Param Compare</title>
   <link rel="icon" href="data:,">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script>
     (() => {
       const themePreference = localStorage.getItem("ardupilot-param-compare-theme") || "system";
@@ -24,6 +21,7 @@
       <div class="brand-block">
         <img class="app-logo" src="./assets/icons/icon.png" alt="" width="24" height="24">
         <h1>ArduPilot Parameter Compare</h1>
+        <span id="appVersionText" class="app-version" aria-label="App version"></span>
         <nav class="app-nav" aria-label="App views">
           <button id="compareNavButton" class="nav-button is-active" type="button" data-view-target="compare">Compare</button>
           <button id="settingsNavButton" class="nav-button" type="button" data-view-target="settings">Settings</button>

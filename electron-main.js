@@ -4,6 +4,7 @@ const { app, BrowserWindow, Menu, safeStorage, shell } = require("electron");
 const path = require("path");
 const { createApp } = require("./server");
 const { createDesktopKeyStore } = require("./desktop-key-store");
+const { isAllowedExternalUrl } = require("./external-navigation");
 
 let mainWindow = null;
 let expressServer = null;
@@ -56,14 +57,18 @@ async function createMainWindow() {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isAllowedExternalUrl(url)) {
+      shell.openExternal(url);
+    }
     return { action: "deny" };
   });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith(serverUrl(expressServer))) {
       event.preventDefault();
-      shell.openExternal(url);
+      if (isAllowedExternalUrl(url)) {
+        shell.openExternal(url);
+      }
     }
   });
 

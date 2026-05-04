@@ -13,6 +13,9 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 env:
   NODE_VERSION: 22
@@ -57,23 +60,14 @@ jobs:
           fi
 
   build-windows:
-    name: Build signed Windows installer
+    name: Build Windows installer
     needs: validate
     runs-on: windows-latest
 
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      CSC_IDENTITY_AUTO_DISCOVERY: false
 
     steps:
-      - name: Check Windows signing secrets
-        shell: pwsh
-        run: |
-          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD) {
-            throw "Missing WIN_CSC_LINK or WIN_CSC_KEY_PASSWORD. Public Windows releases must be signed."
-          }
-
       - name: Check out repository
         uses: actions/checkout@v4
         with:
@@ -94,8 +88,8 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build signed installer
-        run: npm run dist:win:signed
+      - name: Build Windows installer
+        run: npm run dist:win
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -147,12 +141,56 @@ jobs:
             release/latest*.yml
           if-no-files-found: error
 
-  publish:
-    name: Publish GitHub Release
+  build-macos:
+    name: Build macOS packages
+    needs: validate
+    runs-on: macos-latest
+
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript syntax
+        run: npm run check
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build macOS packages
+        run: npm run dist:mac
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+            release/latest*.yml
+          if-no-files-found: error
+
+  attest-release-artifacts:
+    name: Attest release artifacts
     needs:
       - validate
       - build-windows
       - build-linux
+      - build-macos
     runs-on: ubuntu-latest
 
     steps:
@@ -161,6 +199,38 @@ jobs:
         with:
           path: release-artifacts
           merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd release-artifacts
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS' -print0 | sort -z | xargs -0 shasum -a 256 > SHA256SUMS
+
+      - name: Attest release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: release-artifacts/*
+
+      - name: Upload attested release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: attested-release
+          path: release-artifacts/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs:
+      - validate
+      - attest-release-artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: attested-release
+          path: release-artifacts
 
       - name: Publish release
         uses: softprops/action-gh-release@v2

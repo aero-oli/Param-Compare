@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { createDesktopKeyStore } = require("../desktop-key-store");
+const { isAllowedExternalUrl } = require("../external-navigation");
 const {
   buildContextDocuments,
   createApp,
@@ -111,6 +112,44 @@ function createTestSafeStorage() {
     isEncryptionAvailable: () => true
   };
 }
+
+test("release workflow grants artifact attestation permissions", () => {
+  const workflow = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "release.yml"), "utf8");
+
+  assert.match(workflow, /^\s*id-token:\s*write$/m);
+  assert.match(workflow, /^\s*attestations:\s*write$/m);
+  assert.match(workflow, /^\s*artifact-metadata:\s*write$/m);
+});
+
+test("package scripts disable implicit macOS signing for unsigned builds", () => {
+  const packageInfo = require("../package.json");
+
+  assert.match(packageInfo.scripts.pack, /-c\.mac\.identity=false/);
+  assert.match(packageInfo.scripts.dist, /-c\.mac\.identity=false/);
+  assert.match(packageInfo.scripts["dist:mac"], /-c\.mac\.identity=false/);
+});
+
+test("electron-builder files do not force-copy the entire node_modules tree", () => {
+  const packageInfo = require("../package.json");
+
+  assert.equal(packageInfo.build.files.includes("node_modules/**/*"), false);
+});
+
+test("desktop external navigation only allows http and https URLs", () => {
+  assert.equal(isAllowedExternalUrl("https://ardupilot.org"), true);
+  assert.equal(isAllowedExternalUrl("http://127.0.0.1/help"), true);
+  assert.equal(isAllowedExternalUrl("file:///etc/passwd"), false);
+  assert.equal(isAllowedExternalUrl("mailto:test@example.com"), false);
+  assert.equal(isAllowedExternalUrl("javascript:alert(1)"), false);
+  assert.equal(isAllowedExternalUrl("not a url"), false);
+});
+
+test("desktop shell does not load remote fonts on startup", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+
+  assert.equal(html.includes("fonts.googleapis.com"), false);
+  assert.equal(html.includes("fonts.gstatic.com"), false);
+});
 
 test("statusCounts counts comparison statuses", () => {
   assert.deepEqual(statusCounts(sampleRows), {
@@ -226,6 +265,22 @@ test("isolated asks do not consume or update conversation response state", () =>
 
 test("createApp requires Electron desktop key storage", () => {
   assert.throws(() => createApp(), /hosted by Electron/);
+});
+
+test("app info reports package version for the UI", async () => {
+  const app = createApp({
+    desktopKeyStore: createMemoryDesktopKeyStore()
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/app-info`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      name: "ardupilot-param-compare",
+      productName: "ArduPilot Param Compare",
+      version: "1.0.0"
+    });
+  });
 });
 
 test("OpenAI status reports desktop key availability", async () => {

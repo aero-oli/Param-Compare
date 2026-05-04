@@ -49,16 +49,18 @@ npm run dist
 `release/`. `npm run dist` creates the configured Windows, macOS, or Linux
 package for the host platform without publishing it.
 
-For public distribution, use the signed platform scripts through GitHub Actions:
+For public distribution, use the platform package scripts through GitHub
+Actions:
 
 ```bash
-npm run dist:win:signed
+npm run dist:win
+npm run dist:mac
 npm run dist:linux
 ```
 
-Windows builds use the NSIS target. macOS builds use hardened runtime and require
-Developer ID signing plus notarization credentials for distribution outside a
-development machine.
+Windows builds use the NSIS target. macOS builds produce DMG and ZIP packages.
+Linux builds produce AppImage and Debian packages. The release workflow does not
+require repository signing certificates or Apple notarization credentials.
 
 ## GitHub CI and Releases
 
@@ -67,16 +69,20 @@ The repository includes two GitHub Actions workflows:
 - `CI` runs on pull requests and pushes to `main`/`master`. It installs with
   `npm ci`, checks JavaScript syntax, runs tests, and builds an unpacked app.
 - `Release` runs when a `vX.Y.Z` tag is pushed or manually dispatched. It checks
-  that the tag matches `package.json`, builds a signed Windows installer and
-  Linux packages, then publishes a GitHub Release with generated release notes.
+  that the tag matches `package.json`, builds Windows, macOS, and Linux
+  packages, generates checksums, creates GitHub artifact attestations, and
+  publishes a GitHub Release with generated release notes.
 
-Windows public releases intentionally fail unless these repository secrets are
-configured:
+The release workflow does not require manually configured repository secrets.
+It uses GitHub's built-in token and OIDC support for release publishing and
+artifact attestations.
 
-| Secret | Purpose |
-| --- | --- |
-| `WIN_CSC_LINK` | Base64-encoded code-signing certificate, or a secure URL supported by electron-builder |
-| `WIN_CSC_KEY_PASSWORD` | Password for the Windows signing certificate |
+Release assets include platform packages and a `SHA256SUMS` file. The workflow
+also creates GitHub artifact attestations using GitHub Actions OIDC/Sigstore, so
+there is no separate private key to store for release artifact integrity.
+
+The tradeoff is that Windows and macOS packages are not platform code-signed.
+Users may see operating-system trust warnings when opening public builds.
 
 To publish a release:
 

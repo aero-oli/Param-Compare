@@ -114,6 +114,7 @@ const elements = {
   clearVisibleFocusButton: document.getElementById("clearVisibleFocusButton"),
   resultsBody: document.getElementById("resultsBody"),
   statusText: document.getElementById("statusText"),
+  appVersionText: document.getElementById("appVersionText"),
   themePreferenceInput: document.getElementById("themePreferenceInput"),
   metadataStatusText: document.getElementById("metadataStatusText"),
   summaryChanged: document.getElementById("summaryChanged"),
@@ -312,6 +313,15 @@ async function getJson(url) {
     throw new Error(data.error || `Request failed with HTTP ${response.status}`);
   }
   return data;
+}
+
+async function refreshAppInfo() {
+  try {
+    const info = await getJson("/api/app-info");
+    elements.appVersionText.textContent = info.version ? `v${info.version}` : "";
+  } catch (_error) {
+    elements.appVersionText.textContent = "";
+  }
 }
 
 function normalizeVersionRef(raw) {
@@ -2224,4 +2234,5 @@ renderFocusChips();
 renderAiMessages();
 syncAiShellState();
 setAiBusy(false);
+refreshAppInfo();
 refreshAiAvailability();

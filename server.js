@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const path = require("path");
 const express = require("express");
+const packageInfo = require("./package.json");
 
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
 const SESSION_COOKIE = "param_compare_ai_session";
@@ -774,6 +775,14 @@ function createApp(options = {}) {
   }
   const app = express();
   app.use(express.json({ limit: "25mb" }));
+
+  app.get("/api/app-info", (_req, res) => {
+    res.json({
+      name: packageInfo.name,
+      productName: packageInfo.build?.productName || "ArduPilot Param Compare",
+      version: packageInfo.version
+    });
+  });
 
   app.get("/api/openai/status", (_req, res) => {
     res.json({

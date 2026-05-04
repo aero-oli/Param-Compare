@@ -9,11 +9,11 @@
   "scripts": {
     "check": "node --check app.js && node --check desktop-key-store.js && node --check electron-main.js && node --check server.js",
     "desktop": "electron .",
-    "dist": "electron-builder --publish never",
+    "dist": "electron-builder --publish never -c.mac.identity=false",
     "dist:linux": "electron-builder --linux --publish never",
-    "dist:mac:signed": "electron-builder --mac --publish never -c.forceCodeSigning=true",
-    "dist:win:signed": "electron-builder --win --publish never -c.forceCodeSigning=true",
-    "pack": "electron-builder --dir -c.win.signAndEditExecutable=false",
+    "dist:mac": "electron-builder --mac --publish never -c.mac.identity=false",
+    "dist:win": "electron-builder --win --publish never",
+    "pack": "electron-builder --dir -c.win.signAndEditExecutable=false -c.mac.identity=false",
     "test": "node --test"
   },
   "dependencies": {
@@ -33,10 +33,10 @@
       "app.js",
       "desktop-key-store.js",
       "electron-main.js",
+      "external-navigation.js",
       "index.html",
       "server.js",
       "styles.css",
-      "node_modules/**/*",
       "package.json"
     ],
     "directories": {
