@@ -151,6 +151,16 @@ test("desktop shell does not load remote fonts on startup", () => {
   assert.equal(html.includes("fonts.gstatic.com"), false);
 });
 
+test("ArduCopter version control is exposed on the main compare page", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const versionInputIndex = html.indexOf('id="versionRefInput"');
+  const settingsViewIndex = html.indexOf('id="settingsView"');
+
+  assert.ok(versionInputIndex > 0);
+  assert.ok(settingsViewIndex > 0);
+  assert.ok(versionInputIndex < settingsViewIndex);
+});
+
 test("dark theme explicitly overrides loaded table row backgrounds", () => {
   const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
 
@@ -298,6 +308,21 @@ test("app info reports package version for the UI", async () => {
       productName: "ArduPilot Param Compare",
       version: "1.0.0"
     });
+  });
+});
+
+test("desktop server serves header logo asset", async () => {
+  const app = createApp({
+    desktopKeyStore: createMemoryDesktopKeyStore()
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/assets/icons/icon.png`);
+    const body = Buffer.from(await response.arrayBuffer());
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/png");
+    assert.deepEqual([...body.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   });
 });
 

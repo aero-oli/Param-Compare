@@ -286,6 +286,18 @@ tbody tr:focus-visible {
   background: #fbfcfd;
 }
 
+.metadata-source-controls {
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 14px;
+}
+
+.metadata-version-field {
+  min-width: 0;
+}
+
 .advanced-panel {
   margin-top: 14px;
   border-top: 1px solid var(--line);
@@ -3300,6 +3312,12 @@ body {
 
 .file-grid {
   gap: 8px;
+}
+
+.metadata-source-controls {
+  grid-template-columns: minmax(220px, 320px) auto;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .file-field,

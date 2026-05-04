@@ -890,6 +890,7 @@ function createApp(options = {}) {
       res.sendFile(path.join(__dirname, assetPath.slice(1)));
     });
   });
+  app.use("/assets", express.static(path.join(__dirname, "assets")));
   app.get("/vendor/marked.umd.js", (_req, res) => {
     res.sendFile(path.join(__dirname, "node_modules", "marked", "lib", "marked.umd.js"));
   });

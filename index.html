@@ -60,6 +60,14 @@
           </label>
         </div>
 
+        <div class="metadata-source-controls" aria-label="ArduPilot metadata version">
+          <label class="field metadata-version-field">
+            <span>ArduCopter version/ref</span>
+            <input id="versionRefInput" type="text" placeholder="4.5.7 or stable-4.5.7">
+          </label>
+          <button id="resetVersionButton" class="ghost-button inline-action" type="button">Use latest metadata</button>
+        </div>
+
         <div class="status-row">
           <div>
             <p class="status-label">Metadata</p>
@@ -296,10 +304,6 @@
           <p>Defaults used when loading metadata and filtering comparison results.</p>
         </div>
         <div class="settings-grid comparison-settings-grid">
-          <label class="field">
-            <span>ArduCopter version/ref</span>
-            <input id="versionRefInput" type="text" placeholder="4.5.7 or stable-4.5.7">
-          </label>
           <label class="field field-wide">
             <span>Metadata URL</span>
             <input id="metadataUrlInput" type="text" value="https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.json">
@@ -319,7 +323,6 @@
             <input id="showSameInput" type="checkbox">
             <span>Include unchanged parameters</span>
           </label>
-          <button id="resetVersionButton" class="ghost-button inline-action" type="button">Use latest metadata</button>
         </div>
       </section>
     </main>
