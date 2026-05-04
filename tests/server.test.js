@@ -151,6 +151,24 @@ test("desktop shell does not load remote fonts on startup", () => {
   assert.equal(html.includes("fonts.gstatic.com"), false);
 });
 
+test("dark theme explicitly overrides loaded table row backgrounds", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+
+  assert.match(css, /:root\[data-theme="dark"\]\s+tbody tr\.status-same/);
+  assert.match(css, /:root\[data-theme="dark"\]\s+tbody tr\.is-selected/);
+  assert.match(css, /:root\[data-theme="dark"\]\s+\.value-old/);
+  assert.match(css, /:root\[data-theme="dark"\]\s+\.value-new/);
+});
+
+test("notes column and tooltip keep readable dark-mode formatting", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+
+  assert.match(css, /#resultsTable th:nth-child\(8\),\s*#resultsTable td:nth-child\(8\)\s*{[^}]*min-width:\s*140px/s);
+  assert.match(css, /#resultsTable th:nth-child\(8\),\s*#resultsTable td:nth-child\(8\)\s*{[^}]*overflow-wrap:\s*break-word/s);
+  assert.match(css, /:root\[data-theme="dark"\]\s+\.tooltip\s*{[^}]*background:\s*#14202a/s);
+  assert.match(css, /:root\[data-theme="dark"\]\s+\.tooltip\s*{[^}]*color:\s*var\(--text\)/s);
+});
+
 test("statusCounts counts comparison statuses", () => {
   assert.deepEqual(statusCounts(sampleRows), {
     changed: 1,

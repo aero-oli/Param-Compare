@@ -2663,6 +2663,11 @@ tbody tr {
   width: 230px;
 }
 
+#resultsTable th:nth-child(8),
+#resultsTable td:nth-child(8) {
+  width: 150px;
+}
+
 .inspector-panel {
   top: 6px;
   max-height: calc(100vh - 16px);
@@ -4477,4 +4482,94 @@ h2 {
   .settings-grid .field-wide {
     grid-column: auto;
   }
+}
+
+:root[data-theme="dark"] .table-wrap,
+:root[data-theme="dark"] table,
+:root[data-theme="dark"] #resultsTable {
+  background: var(--surface);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] tbody tr,
+:root[data-theme="dark"] tbody tr.status-changed,
+:root[data-theme="dark"] tbody tr.status-added,
+:root[data-theme="dark"] tbody tr.status-removed,
+:root[data-theme="dark"] tbody tr.status-same {
+  background: var(--surface);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] tbody tr.status-changed td:first-child {
+  box-shadow: inset 3px 0 0 var(--changed-fg);
+}
+
+:root[data-theme="dark"] tbody tr.status-added td:first-child {
+  box-shadow: inset 3px 0 0 var(--added-fg);
+}
+
+:root[data-theme="dark"] tbody tr.status-removed td:first-child {
+  box-shadow: inset 3px 0 0 var(--removed-fg);
+}
+
+:root[data-theme="dark"] tbody tr.status-same td:first-child {
+  box-shadow: inset 3px 0 0 var(--same-fg);
+}
+
+:root[data-theme="dark"] tbody tr:hover {
+  background: var(--row-hover-bg);
+}
+
+:root[data-theme="dark"] tbody tr.is-selected,
+:root[data-theme="dark"] tbody tr.is-focused {
+  background: var(--row-selected-bg);
+}
+
+:root[data-theme="dark"] tbody td,
+:root[data-theme="dark"] .param-name {
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .param-label,
+:root[data-theme="dark"] .empty-meta,
+:root[data-theme="dark"] .value-missing {
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .meta-stack,
+:root[data-theme="dark"] .meta-stack span {
+  color: var(--muted-strong);
+}
+
+:root[data-theme="dark"] .meta-stack strong {
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .value-old {
+  color: #f0c678;
+}
+
+:root[data-theme="dark"] .value-new {
+  color: #8ee2ad;
+}
+
+#resultsTable th:nth-child(8),
+#resultsTable td:nth-child(8) {
+  min-width: 140px;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.tooltip {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--text);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme="dark"] .tooltip {
+  background: #14202a;
+  border-color: var(--line-strong);
+  color: var(--text);
 }
