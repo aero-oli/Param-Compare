@@ -21,7 +21,7 @@
     "marked": "^18.0.3"
   },
   "devDependencies": {
-    "electron": "^38.4.0",
+    "electron": "^41.5.0",
     "electron-builder": "^26.0.12"
   },
   "build": {
