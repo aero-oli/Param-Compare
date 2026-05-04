@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": false,
   "description": "Static ArduPilot parameter comparison tool with an OpenAI-powered parameter assistant.",
+  "license": "MIT",
   "author": "ArduPilot Param Compare",
   "main": "electron-main.js",
   "scripts": {

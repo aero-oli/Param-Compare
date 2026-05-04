@@ -67,7 +67,8 @@ function createDesktopKeyStore(options) {
     clearKey,
     getKey,
     hasKey,
-    isAvailable
+    isAvailable,
+    setKey
   };
 }
 

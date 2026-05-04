@@ -2,7 +2,11 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
+const { createDesktopKeyStore } = require("../desktop-key-store");
 const {
   buildContextDocuments,
   createApp,
@@ -97,6 +101,14 @@ function createMemoryDesktopKeyStore(initialKey = "") {
     get savedKey() {
       return savedKey;
     }
+  };
+}
+
+function createTestSafeStorage() {
+  return {
+    decryptString: (buffer) => buffer.toString("utf8"),
+    encryptString: (text) => Buffer.from(String(text), "utf8"),
+    isEncryptionAvailable: () => true
   };
 }
 
@@ -276,6 +288,47 @@ test("OpenAI session can save and use a desktop stored key", async () => {
     assert.equal(clearResponse.status, 200);
     assert.equal(desktopKeyStore.savedKey, "");
   });
+});
+
+test("OpenAI session can save and reuse the real desktop key store adapter", async () => {
+  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "param-compare-key-store-"));
+  try {
+    const desktopKeyStore = createDesktopKeyStore({
+      safeStorage: createTestSafeStorage(),
+      userDataPath
+    });
+    const seenKeys = [];
+    const app = createApp({
+      desktopKeyStore,
+      validateApiKey: async (apiKey) => {
+        seenKeys.push(apiKey);
+        return ["gpt-5.4-mini"];
+      }
+    });
+
+    await withTestServer(app, async (baseUrl) => {
+      const saveResponse = await fetch(`${baseUrl}/api/openai/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: "sk-real-adapter", rememberApiKey: true })
+      });
+      const saveBody = await saveResponse.json();
+
+      assert.equal(saveResponse.status, 200);
+      assert.equal(saveBody.desktopStoredKeyAvailable, true);
+
+      const storedResponse = await fetch(`${baseUrl}/api/openai/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useDesktopStoredKey: true })
+      });
+
+      assert.equal(storedResponse.status, 200);
+      assert.deepEqual(seenKeys, ["sk-real-adapter", "sk-real-adapter"]);
+    });
+  } finally {
+    fs.rmSync(userDataPath, { recursive: true, force: true });
+  }
 });
 
 test("OpenAI session still accepts an entered key and cleanup clears it", async () => {

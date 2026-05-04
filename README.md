@@ -94,6 +94,14 @@ the package version matches the tag without the leading `v`.
 npm test
 ```
 
+## Public Use
+
+This project is released under the MIT License. See [LICENSE](LICENSE).
+
+For vulnerability reporting and secret-handling guidance, see
+[SECURITY.md](SECURITY.md). For how local files, metadata, exports, and optional
+OpenAI assistant context are handled, see [PRIVACY.md](PRIVACY.md).
+
 ## Comparison Workflow
 
 1. Select the old parameter file and the new parameter file.
