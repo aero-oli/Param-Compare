@@ -233,7 +233,7 @@ jobs:
           path: release-artifacts
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
           name: ArduPilot Param Compare ${{ needs.validate.outputs.tag }}
