@@ -67,6 +67,7 @@
     },
     "linux": {
       "icon": "build/icon.png",
+      "maintainer": "ArduPilot Param Compare <noreply@github.com>",
       "target": [
         "AppImage",
         "deb"
